@@ -12,9 +12,12 @@ from uuid import UUID
 
 import structlog
 from arq import ArqRedis
+from sqlalchemy import select, update, delete
+from sqlalchemy.orm import selectinload
 
 from subtext.config import settings
 from subtext.core.models import SessionStatus, SignalType
+from subtext.db import get_session, SessionModel, SignalModel, InsightModel, SpeakerModel, TranscriptSegmentModel, ProsodicsModel
 
 logger = structlog.get_logger()
 
@@ -517,8 +520,14 @@ async def _update_session_status(
     error_message: str | None = None,
 ) -> None:
     """Update session status in database."""
-    # TODO: Implement with SQLAlchemy
-    pass
+    async with get_session() as session:
+        stmt = (
+            update(SessionModel)
+            .where(SessionModel.id == session_id)
+            .values(status=status, error_message=error_message)
+        )
+        await session.execute(stmt)
+        logger.info("Session status updated", session_id=str(session_id), status=status.value)
 
 
 async def _update_session_completed(
@@ -529,8 +538,27 @@ async def _update_session_completed(
     processing_time_ms: int,
 ) -> None:
     """Update session with completion data."""
-    # TODO: Implement with SQLAlchemy
-    pass
+    async with get_session() as session:
+        stmt = (
+            update(SessionModel)
+            .where(SessionModel.id == session_id)
+            .values(
+                status=SessionStatus.COMPLETED,
+                duration_ms=duration_ms,
+                speaker_count=speaker_count,
+                signal_count=signal_count,
+                processing_time_ms=processing_time_ms,
+                completed_at=datetime.utcnow(),
+            )
+        )
+        await session.execute(stmt)
+        logger.info(
+            "Session completed",
+            session_id=str(session_id),
+            duration_ms=duration_ms,
+            speaker_count=speaker_count,
+            signal_count=signal_count,
+        )
 
 
 async def _save_processing_results(
@@ -538,14 +566,84 @@ async def _save_processing_results(
     result: dict[str, Any],
 ) -> None:
     """Save processing results to database."""
-    # TODO: Implement with SQLAlchemy
-    pass
+    async with get_session() as session:
+        # Save signals
+        if result.get("signals"):
+            for signal_data in result["signals"]:
+                signal = SignalModel(
+                    session_id=session_id,
+                    signal_type=signal_data.get("type"),
+                    timestamp_ms=signal_data.get("timestamp_ms", 0),
+                    duration_ms=signal_data.get("duration_ms"),
+                    confidence=signal_data.get("confidence", 0.0),
+                    intensity=signal_data.get("intensity", 0.0),
+                    speaker_id=signal_data.get("speaker_id"),
+                    context=signal_data.get("context", {}),
+                )
+                session.add(signal)
+
+        # Update session metadata with results summary
+        stmt = (
+            update(SessionModel)
+            .where(SessionModel.id == session_id)
+            .values(
+                session_metadata={
+                    "processed_at": datetime.utcnow().isoformat(),
+                    "signal_count": len(result.get("signals", [])),
+                }
+            )
+        )
+        await session.execute(stmt)
+        logger.info("Processing results saved", session_id=str(session_id))
 
 
 async def _get_session_data(session_id: UUID) -> dict[str, Any] | None:
     """Get session data from database."""
-    # TODO: Implement with SQLAlchemy
-    return None
+    async with get_session() as session:
+        stmt = (
+            select(SessionModel)
+            .options(
+                selectinload(SessionModel.signals),
+                selectinload(SessionModel.speakers),
+                selectinload(SessionModel.segments),
+            )
+            .where(SessionModel.id == session_id)
+        )
+        result = await session.execute(stmt)
+        session_model = result.scalar_one_or_none()
+
+        if not session_model:
+            return None
+
+        return {
+            "id": str(session_model.id),
+            "name": session_model.name,
+            "status": session_model.status.value if session_model.status else None,
+            "duration_ms": session_model.duration_ms,
+            "speaker_count": session_model.speaker_count,
+            "signals": [
+                {
+                    "type": s.signal_type,
+                    "timestamp_ms": s.timestamp_ms,
+                    "confidence": s.confidence,
+                    "intensity": s.intensity,
+                }
+                for s in session_model.signals
+            ],
+            "speakers": [
+                {"id": str(sp.id), "label": sp.label}
+                for sp in session_model.speakers
+            ],
+            "transcript": [
+                {
+                    "start_ms": seg.start_ms,
+                    "end_ms": seg.end_ms,
+                    "text": seg.text,
+                    "speaker_label": seg.speaker.label if seg.speaker else None,
+                }
+                for seg in session_model.segments
+            ],
+        }
 
 
 async def _generate_insights(session_data: dict) -> list[dict]:
@@ -568,8 +666,17 @@ async def _generate_insights(session_data: dict) -> list[dict]:
 
 async def _save_insights(session_id: UUID, insights: list[dict]) -> None:
     """Save insights to database."""
-    # TODO: Implement with SQLAlchemy
-    pass
+    async with get_session() as session:
+        for insight_data in insights:
+            insight = InsightModel(
+                session_id=session_id,
+                insight_type=insight_data.get("type", "observation"),
+                content=insight_data.get("content", ""),
+                importance=insight_data.get("importance", 0.5),
+                context=insight_data.get("context", {}),
+            )
+            session.add(insight)
+        logger.info("Insights saved", session_id=str(session_id), count=len(insights))
 
 
 async def _generate_summary(
@@ -609,8 +716,68 @@ async def _generate_recommendations(
 
 async def _get_full_session_export(session_id: UUID) -> dict[str, Any]:
     """Get full session data for export."""
-    # TODO: Implement with SQLAlchemy
-    return {}
+    async with get_session() as session:
+        stmt = (
+            select(SessionModel)
+            .options(
+                selectinload(SessionModel.signals),
+                selectinload(SessionModel.speakers),
+                selectinload(SessionModel.segments),
+                selectinload(SessionModel.prosodics),
+                selectinload(SessionModel.insights),
+            )
+            .where(SessionModel.id == session_id)
+        )
+        result = await session.execute(stmt)
+        session_model = result.scalar_one_or_none()
+
+        if not session_model:
+            return {}
+
+        return {
+            "session": {
+                "id": str(session_model.id),
+                "name": session_model.name,
+                "status": session_model.status.value if session_model.status else None,
+                "duration_ms": session_model.duration_ms,
+                "speaker_count": session_model.speaker_count,
+                "signal_count": session_model.signal_count,
+                "created_at": session_model.created_at.isoformat() if session_model.created_at else None,
+                "completed_at": session_model.completed_at.isoformat() if session_model.completed_at else None,
+            },
+            "transcript": [
+                {
+                    "start_ms": seg.start_ms,
+                    "end_ms": seg.end_ms,
+                    "text": seg.text,
+                    "speaker_label": seg.speaker.label if seg.speaker else None,
+                    "confidence": seg.confidence,
+                }
+                for seg in session_model.segments
+            ],
+            "signals": [
+                {
+                    "type": s.signal_type,
+                    "timestamp_ms": s.timestamp_ms,
+                    "duration_ms": s.duration_ms,
+                    "confidence": s.confidence,
+                    "intensity": s.intensity,
+                }
+                for s in session_model.signals
+            ],
+            "speakers": [
+                {"id": str(sp.id), "label": sp.label}
+                for sp in session_model.speakers
+            ],
+            "insights": [
+                {
+                    "type": ins.insight_type,
+                    "content": ins.content,
+                    "importance": ins.importance,
+                }
+                for ins in session_model.insights
+            ],
+        }
 
 
 async def _export_json(session_id: UUID, data: dict) -> str:
@@ -682,11 +849,30 @@ async def _upload_to_storage(
 
 async def _find_expired_sessions(cutoff_date: datetime) -> list[dict]:
     """Find sessions older than cutoff date."""
-    # TODO: Implement with SQLAlchemy
-    return []
+    async with get_session() as session:
+        stmt = (
+            select(SessionModel)
+            .where(SessionModel.created_at < cutoff_date)
+            .where(SessionModel.status == SessionStatus.COMPLETED)
+        )
+        result = await session.execute(stmt)
+        sessions = result.scalars().all()
+
+        return [
+            {
+                "id": str(s.id),
+                "name": s.name,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "org_id": str(s.org_id),
+            }
+            for s in sessions
+        ]
 
 
 async def _delete_session_data(session_id: UUID) -> None:
     """Delete session and all associated data."""
-    # TODO: Implement with SQLAlchemy
-    pass
+    async with get_session() as session:
+        # Delete the session (cascades to related data)
+        stmt = delete(SessionModel).where(SessionModel.id == session_id)
+        await session.execute(stmt)
+        logger.info("Session deleted", session_id=str(session_id))
