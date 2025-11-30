@@ -89,10 +89,39 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+# Import models to ensure they're registered with Base
+from subtext.db.models import (
+    OrganizationModel,
+    UserModel,
+    SessionModel,
+    SpeakerModel,
+    TranscriptSegmentModel,
+    SignalModel,
+    ProsodicsModel,
+    InsightModel,
+    TimelineModel,
+    VoiceFingerprintModel,
+    APIKeyModel,
+    UsageRecordModel,
+)
+
 __all__ = [
     "Base",
     "init_db",
     "close_db",
     "get_session",
     "get_db",
+    # Models
+    "OrganizationModel",
+    "UserModel",
+    "SessionModel",
+    "SpeakerModel",
+    "TranscriptSegmentModel",
+    "SignalModel",
+    "ProsodicsModel",
+    "InsightModel",
+    "TimelineModel",
+    "VoiceFingerprintModel",
+    "APIKeyModel",
+    "UsageRecordModel",
 ]
