@@ -1,0 +1,152 @@
+# Enclii Platform Configuration for Subtext
+# https://github.com/madfam-io/enclii
+
+apiVersion: enclii.dev/v1
+kind: Project
+metadata:
+  name: subtext
+  description: "Metacognitive Engine - Conversational Intelligence Infrastructure"
+  team: madfam
+
+spec:
+  # Build Configuration
+  build:
+    # Auto-detect build method (Nixpacks, Buildpacks, Dockerfile)
+    method: dockerfile
+    context: .
+
+  # Environment Configuration
+  environments:
+    development:
+      domain: dev.subtext.live
+      replicas: 1
+
+    staging:
+      domain: staging.subtext.live
+      replicas: 2
+
+    production:
+      domain: subtext.live
+      replicas: 3
+      autoscaling:
+        enabled: true
+        minReplicas: 3
+        maxReplicas: 20
+        targetCPUUtilizationPercentage: 70
+
+  # Services
+  services:
+    - name: api
+      path: ./services/api
+      port: 8000
+      healthCheck:
+        path: /health
+        interval: 30s
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+
+    - name: pipeline-worker
+      path: ./services/pipeline
+      replicas: 3
+      resources:
+        requests:
+          cpu: 2000m
+          memory: 8Gi
+          nvidia.com/gpu: 1
+        limits:
+          cpu: 4000m
+          memory: 16Gi
+          nvidia.com/gpu: 1
+
+    - name: realtime
+      path: ./services/realtime
+      port: 8001
+      healthCheck:
+        path: /health
+        interval: 10s
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+
+    - name: web
+      path: ./web
+      port: 3000
+      healthCheck:
+        path: /api/health
+        interval: 30s
+
+  # Dependencies (managed by Enclii)
+  dependencies:
+    postgresql:
+      version: "15"
+      extensions:
+        - timescaledb
+        - uuid-ossp
+        - pgcrypto
+      storage: 100Gi
+
+    redis:
+      version: "7"
+      maxMemory: 2Gi
+
+  # External Services
+  external:
+    janua:
+      url: https://auth.madfam.io
+      description: "Authentication via Janua"
+
+  # Secrets (referenced from Enclii secrets management)
+  secrets:
+    - name: DATABASE_URL
+      key: subtext/database-url
+    - name: REDIS_URL
+      key: subtext/redis-url
+    - name: JANUA_CLIENT_ID
+      key: subtext/janua-client-id
+    - name: JANUA_CLIENT_SECRET
+      key: subtext/janua-client-secret
+    - name: STRIPE_SECRET_KEY
+      key: subtext/stripe-secret-key
+    - name: STRIPE_WEBHOOK_SECRET
+      key: subtext/stripe-webhook-secret
+    - name: RESEND_API_KEY
+      key: subtext/resend-api-key
+    - name: OPENAI_API_KEY
+      key: subtext/openai-api-key
+    - name: S3_ACCESS_KEY
+      key: subtext/s3-access-key
+    - name: S3_SECRET_KEY
+      key: subtext/s3-secret-key
+
+  # Domains (via Cloudflare for SaaS)
+  domains:
+    - host: subtext.live
+      service: web
+    - host: api.subtext.live
+      service: api
+    - host: realtime.subtext.live
+      service: realtime
+    - host: "*.subtext.live"
+      service: web
+      wildcard: true
+
+  # Observability
+  monitoring:
+    prometheus:
+      enabled: true
+      scrapeInterval: 15s
+    logging:
+      driver: json
+      retention: 30d
+    tracing:
+      enabled: true
+      samplingRate: 0.1

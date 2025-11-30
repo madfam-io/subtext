@@ -1,0 +1,1071 @@
+# SUBTEXT PLATFORM ARCHITECTURE
+## Fortune 500-Grade Design Specification v1.0
+
+**Codename:** Project Resonance
+**Classification:** Strategic Platform Blueprint
+**Status:** Design Phase
+
+---
+
+# PART I: STRATEGIC AMPLIFICATION
+
+## 1. The Blue Ocean Expansion Matrix
+
+We're not just building a product. We're creating a **new category**: **Conversational Intelligence Infrastructure (CII)**.
+
+### 1.1 Value Curve Inversion
+
+| Dimension | Red Ocean (Otter/Gong/Chorus) | **Subtext Blue Ocean** |
+|-----------|-------------------------------|------------------------|
+| Data Unit | Words (Text) | **Signals (Bio-Acoustic Primitives)** |
+| Timing | Post-hoc analysis | **Real-time augmentation** |
+| Output | Summaries & action items | **Psychometric state + predictive intent** |
+| Privacy Model | Cloud-dependent, vendor lock-in | **Sovereign-first, edge-compute capable** |
+| Integration | Siloed recordings | **Ambient spatial layer (metaverse-native)** |
+| AI Role | Transcription utility | **Cognitive co-pilot with emotional IQ** |
+| Moat | Content corpus | **Signal ontology + behavioral fingerprints** |
+
+### 1.2 The "Juice" - Defensible Differentiators
+
+**MOAT 1: The Signal Ontology (IP)**
+- Proprietary taxonomy mapping 200+ bio-acoustic markers to psychological states
+- Continuously refined through federated learning (privacy-preserving)
+- Becomes the "DSM for Digital Communication"
+
+**MOAT 2: The Behavioral Fingerprint Graph**
+- Anonymous, consent-based "voice signatures" that track individual patterns over time
+- Detects deviation from baseline: "Sarah sounds 40% more stressed than her 90-day average"
+- Network effect: More users = richer baseline models
+
+**MOAT 3: The Spatial Protocol**
+- First-mover in "Emotional State Broadcasting" for metaverse/spatial platforms
+- Open standard proposal: **ESP (Emotional State Protocol)** for WebRTC
+- Becomes the "Dolby Atmos of Human Presence"
+
+**MOAT 4: The Integration Mesh**
+- Deep hooks into WorkAdventure, Gather, Spatial, Mozilla Hubs
+- Enterprise connectors: Zoom, Teams, Webex, Slack, Discord
+- CRM enrichment: Salesforce, HubSpot, Gong (yes, coopetition)
+
+---
+
+## 2. Market Segmentation & Expansion Vectors
+
+### 2.1 Beachhead → Bowling Pin Strategy
+
+```
+PHASE 1: BEACHHEAD (Year 1)
+├── Spatial Communities (WorkAdventure power users)
+├── Remote-First Startups (culture-obsessed)
+└── Executive Coaches / Leadership Trainers
+
+PHASE 2: ADJACENT PINS (Year 2-3)
+├── Enterprise HR (Psychological Safety measurement)
+├── Sales Enablement (Deal intelligence)
+├── Customer Success (Churn prediction via sentiment)
+└── Healthcare (Telehealth burnout detection)
+
+PHASE 3: MARKET DOMINANCE (Year 4+)
+├── Insurance (Risk assessment via voice biomarkers)
+├── Legal (Deposition analysis, witness credibility)
+├── Government (Diplomatic negotiation intelligence)
+└── Education (Student engagement & comprehension)
+```
+
+### 2.2 Total Addressable Market (TAM) Evolution
+
+| Segment | TAM | Our Angle |
+|---------|-----|-----------|
+| Conversation Intelligence | $15B by 2028 | Emotion layer on top |
+| Employee Experience Platforms | $12B by 2027 | Psychological Safety Score |
+| Telehealth | $460B by 2030 | Burnout/depression markers |
+| Metaverse Enterprise | $50B by 2026 | Native presence protocol |
+| **Combined Serviceable Market** | **$80B+** | **CII as horizontal layer** |
+
+---
+
+# PART II: ENTERPRISE ARCHITECTURE
+
+## 3. System Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SUBTEXT PLATFORM                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  PRESENTATION LAYER                                                          │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │
+│  │  Web App     │ │  Desktop     │ │  Mobile      │ │  Browser     │       │
+│  │  Dashboard   │ │  Companion   │ │  (iOS/And)   │ │  Extension   │       │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  API GATEWAY & ORCHESTRATION                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Kong/AWS API Gateway │ Rate Limiting │ Auth (OAuth2/SAML) │ Routing │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  CORE SERVICES (Kubernetes/ECS)                                              │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐              │
+│  │  Ingestion │ │  Pipeline  │ │  Analysis  │ │  Delivery  │              │
+│  │  Service   │ │  Orchestr. │ │  Engine    │ │  Service   │              │
+│  └────────────┘ └────────────┘ └────────────┘ └────────────┘              │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐              │
+│  │  Identity  │ │  Billing   │ │  Webhook   │ │  Spatial   │              │
+│  │  Service   │ │  Service   │ │  Service   │ │  Bridge    │              │
+│  └────────────┘ └────────────┘ └────────────┘ └────────────┘              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ML/AI LAYER                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Model Registry │ Feature Store │ Inference Cluster │ Training Jobs │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  DATA LAYER                                                                  │
+│  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐              │
+│  │ PostgreSQL │ │ TimescaleDB│ │ Redis      │ │ S3/Blob    │              │
+│  │ (Metadata) │ │ (Signals)  │ │ (Cache/RT) │ │ (Audio)    │              │
+│  └────────────┘ └────────────┘ └────────────┘ └────────────┘              │
+│  ┌────────────┐ ┌────────────┐                                             │
+│  │ Pinecone/  │ │ ClickHouse │                                             │
+│  │ Qdrant     │ │ (Analytics)│                                             │
+│  │ (Vectors)  │ │            │                                             │
+│  └────────────┘ └────────────┘                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  INFRASTRUCTURE                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Kubernetes │ Terraform │ Vault │ Prometheus/Grafana │ OpenTelemetry │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 4. The Signal Processing Pipeline (Deep Dive)
+
+### 4.1 Pipeline Architecture
+
+```
+                    INGESTION TIER
+                         │
+    ┌────────────────────┼────────────────────┐
+    │                    │                    │
+    ▼                    ▼                    ▼
+┌─────────┐      ┌─────────────┐      ┌─────────────┐
+│ WebRTC  │      │  File Drop  │      │  Bot Relay  │
+│ Stream  │      │  (S3/GCS)   │      │  (Zoom/MS)  │
+└────┬────┘      └──────┬──────┘      └──────┬──────┘
+     │                  │                    │
+     └──────────────────┼────────────────────┘
+                        ▼
+              ┌─────────────────┐
+              │  AUDIO ROUTER   │
+              │  (Kafka/Pulsar) │
+              └────────┬────────┘
+                       │
+         ┌─────────────┼─────────────┐
+         │             │             │
+         ▼             ▼             ▼
+    ┌─────────┐  ┌──────────┐  ┌──────────┐
+    │ CLEANSE │  │ PARALLEL │  │ PARALLEL │
+    │ Worker  │  │ Worker 2 │  │ Worker N │
+    └────┬────┘  └────┬─────┘  └────┬─────┘
+         │            │             │
+         └────────────┼─────────────┘
+                      ▼
+              ┌───────────────┐
+              │ SIGNAL FUSION │
+              │    ENGINE     │
+              └───────┬───────┘
+                      │
+    ┌─────────────────┼─────────────────┐
+    │                 │                 │
+    ▼                 ▼                 ▼
+┌─────────┐    ┌────────────┐    ┌──────────┐
+│REALTIME │    │  BATCH     │    │  WEBHOOK │
+│WebSocket│    │  Analytics │    │  Delivery│
+└─────────┘    └────────────┘    └──────────┘
+```
+
+### 4.2 Processing Stages (Enhanced)
+
+| Stage | Model Stack | Latency Target | Output |
+|-------|-------------|----------------|--------|
+| **Cleanse** | DeepFilterNet v3 | <50ms | Clean PCM + Noise Profile |
+| **Diarize** | Pyannote 3.0 + Custom | <200ms | Speaker segments + embeddings |
+| **Transcribe** | WhisperX Large-v3 | <500ms | Word-level transcript + confidence |
+| **Prosodics** | Custom Wav2Vec2-SER | <100ms | 47 acoustic features per segment |
+| **Semantics** | Fine-tuned Llama-3 70B | <2s | Intent, sentiment, topic, entities |
+| **Synthesis** | Mixtral-8x22B MoE | <3s | Psychometric state + recommendations |
+| **Predict** | Custom LSTM/Transformer | <100ms | Next-turn prediction, risk scores |
+
+### 4.3 The 47 Acoustic Features (Prosodic Fingerprint)
+
+```python
+PROSODIC_FEATURES = {
+    # Pitch (F0) Features
+    "pitch_mean": "Average fundamental frequency (Hz)",
+    "pitch_std": "Pitch variability",
+    "pitch_range": "Max - Min pitch",
+    "pitch_slope": "Rising/falling intonation trend",
+    "pitch_jitter": "Cycle-to-cycle frequency variation",
+
+    # Energy Features
+    "energy_mean": "Average loudness (dB)",
+    "energy_std": "Volume variability",
+    "energy_range": "Dynamic range",
+    "shimmer": "Cycle-to-cycle amplitude variation",
+
+    # Temporal Features
+    "speech_rate": "Syllables per second",
+    "articulation_rate": "Speech rate excluding pauses",
+    "pause_frequency": "Pauses per minute",
+    "pause_duration_mean": "Average pause length",
+    "pause_duration_max": "Longest pause",
+    "response_latency": "Time to respond after prompt",
+
+    # Voice Quality
+    "harmonic_noise_ratio": "Voice clarity",
+    "spectral_centroid": "Brightness of voice",
+    "spectral_flux": "Rate of spectral change",
+    "mfcc_1_to_13": "Mel-frequency cepstral coefficients",
+    "formant_f1_f4": "Resonance frequencies",
+
+    # Interaction Features
+    "turn_duration": "Length of speaking turn",
+    "overlap_ratio": "% of turn overlapping others",
+    "interrupt_count": "Interruptions initiated",
+    "interrupted_count": "Times interrupted by others",
+    "floor_hold_success": "% of interruption attempts that succeeded"
+}
+```
+
+---
+
+## 5. Data Architecture
+
+### 5.1 Core Data Models
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ENTITY RELATIONSHIP                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──────────────┐         ┌──────────────┐                      │
+│  │ Organization │ 1────M  │    Team      │                      │
+│  └──────┬───────┘         └──────┬───────┘                      │
+│         │                        │                               │
+│         │ 1                      │ M                             │
+│         │                        │                               │
+│         ▼                        ▼                               │
+│  ┌──────────────┐         ┌──────────────┐                      │
+│  │    User      │ M────M  │   Session    │                      │
+│  └──────┬───────┘         └──────┬───────┘                      │
+│         │                        │                               │
+│         │ 1                      │ 1                             │
+│         │                        │                               │
+│         ▼                        ▼                               │
+│  ┌──────────────┐         ┌──────────────┐                      │
+│  │VoiceProfile  │         │  Recording   │                      │
+│  │(Fingerprint) │         └──────┬───────┘                      │
+│  └──────────────┘                │                               │
+│                                  │ 1                             │
+│                                  │                               │
+│                                  ▼                               │
+│                          ┌──────────────┐                       │
+│                          │   Segment    │                       │
+│                          └──────┬───────┘                       │
+│                                 │                                │
+│                    ┌────────────┼────────────┐                  │
+│                    │            │            │                   │
+│                    ▼            ▼            ▼                   │
+│             ┌──────────┐ ┌──────────┐ ┌──────────┐              │
+│             │Transcript│ │ Prosodic │ │  Signal  │              │
+│             │  Chunk   │ │ Features │ │  Events  │              │
+│             └──────────┘ └──────────┘ └──────────┘              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 Time-Series Signal Storage (TimescaleDB)
+
+```sql
+-- Hypertable for real-time signal events
+CREATE TABLE signal_events (
+    id              UUID DEFAULT gen_random_uuid(),
+    session_id      UUID NOT NULL,
+    speaker_id      UUID NOT NULL,
+    timestamp       TIMESTAMPTZ NOT NULL,
+    signal_type     VARCHAR(50) NOT NULL,  -- 'truth_gap', 'steamroll', etc.
+    confidence      FLOAT NOT NULL,
+    duration_ms     INTEGER,
+    intensity       FLOAT,  -- 0.0 to 1.0
+    metadata        JSONB,
+    PRIMARY KEY (id, timestamp)
+);
+
+SELECT create_hypertable('signal_events', 'timestamp');
+
+-- Continuous aggregate for dashboard metrics
+CREATE MATERIALIZED VIEW session_signal_summary
+WITH (timescaledb.continuous) AS
+SELECT
+    session_id,
+    time_bucket('1 minute', timestamp) AS bucket,
+    signal_type,
+    COUNT(*) as event_count,
+    AVG(confidence) as avg_confidence,
+    AVG(intensity) as avg_intensity
+FROM signal_events
+GROUP BY session_id, bucket, signal_type;
+```
+
+### 5.3 Vector Store for Voice Fingerprints
+
+```python
+# Pinecone/Qdrant schema for voice embeddings
+voice_fingerprint_schema = {
+    "index_name": "voice-fingerprints",
+    "dimension": 512,  # Wav2Vec2 embedding size
+    "metric": "cosine",
+    "metadata_schema": {
+        "user_id": "string",
+        "org_id": "string",
+        "capture_date": "datetime",
+        "baseline_type": "string",  # 'neutral', 'stressed', 'engaged'
+        "quality_score": "float"
+    }
+}
+
+# Query for deviation detection
+def detect_deviation(current_embedding, user_id, threshold=0.15):
+    """
+    Compare current voice state to user's baseline.
+    Returns deviation score and likely emotional shift.
+    """
+    baseline = vector_store.query(
+        vector=current_embedding,
+        filter={"user_id": user_id, "baseline_type": "neutral"},
+        top_k=5
+    )
+    # Deviation = 1 - similarity (higher = more different from baseline)
+    return 1 - baseline.matches[0].score
+```
+
+---
+
+# PART III: PRODUCT SUITE
+
+## 6. Product Tiers & Packaging
+
+### 6.1 Product Matrix
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SUBTEXT PRODUCT SUITE                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+│  │   SUBTEXT       │  │   SUBTEXT       │  │   SUBTEXT       │             │
+│  │   PERSONAL      │  │   TEAMS         │  │   ENTERPRISE    │             │
+│  │                 │  │                 │  │                 │             │
+│  │  Free / $9/mo   │  │   $29/seat/mo   │  │   Custom        │             │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
+│                                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+│  │   SUBTEXT       │  │   SUBTEXT       │  │   SUBTEXT       │             │
+│  │   API           │  │   EMBEDDED      │  │   ON-PREM       │             │
+│  │                 │  │   (SDK/OEM)     │  │                 │             │
+│  │  Usage-based    │  │   Revenue Share │  │   License       │             │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 6.2 Feature Breakdown by Tier
+
+| Feature | Personal | Teams | Enterprise |
+|---------|----------|-------|------------|
+| **Audio Analysis** | 5 hrs/mo | Unlimited | Unlimited |
+| **Real-time Processing** | - | Yes | Yes |
+| **Signal Detection** | Basic (6) | Full (20+) | Full + Custom |
+| **Tension Timeline** | Yes | Yes | Yes |
+| **Psychometric Dashboard** | - | Yes | Yes |
+| **Team Analytics** | - | Yes | Yes + Benchmarks |
+| **Voice Fingerprinting** | - | Optional | Yes |
+| **API Access** | - | 10K calls/mo | Unlimited |
+| **Integrations** | 2 | 10 | Unlimited |
+| **SSO/SAML** | - | - | Yes |
+| **Data Residency** | US/EU | US/EU | Any region |
+| **On-Premise** | - | - | Yes |
+| **SLA** | - | 99.5% | 99.99% |
+| **Support** | Community | Email | Dedicated CSM |
+
+### 6.3 API Pricing Model
+
+```
+SUBTEXT API PRICING
+═══════════════════
+
+TIER 1: DEVELOPER (Free)
+├── 1,000 minutes/month
+├── Rate limit: 10 req/min
+└── Community support
+
+TIER 2: STARTUP ($0.006/minute)
+├── Pay-as-you-go
+├── Rate limit: 100 req/min
+├── Volume discounts at 100K+ min
+└── Email support
+
+TIER 3: SCALE ($0.004/minute)
+├── Committed use (prepaid)
+├── Rate limit: 1,000 req/min
+├── Custom model fine-tuning
+└── Dedicated support
+
+TIER 4: ENTERPRISE (Custom)
+├── Private deployment option
+├── Custom SLAs
+├── White-label available
+└── On-site integration support
+```
+
+---
+
+## 7. Platform Ecosystem
+
+### 7.1 Integration Marketplace
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      SUBTEXT INTEGRATION HUB                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  COMMUNICATION                 CRM & SALES              HR & CULTURE         │
+│  ┌──────────┐ ┌──────────┐    ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │   Zoom   │ │  Teams   │    │Salesforce│ │ HubSpot  │ │ Workday  │       │
+│  └──────────┘ └──────────┘    └──────────┘ └──────────┘ └──────────┘       │
+│  ┌──────────┐ ┌──────────┐    ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │  Slack   │ │ Discord  │    │   Gong   │ │  Chorus  │ │  Lattice │       │
+│  └──────────┘ └──────────┘    └──────────┘ └──────────┘ └──────────┘       │
+│  ┌──────────┐ ┌──────────┐    ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │  Webex   │ │ G Meet   │    │ Outreach │ │ Clari    │ │ Culture  │       │
+│  └──────────┘ └──────────┘    └──────────┘ └──────────┘ │   Amp    │       │
+│                                                          └──────────┘       │
+│  SPATIAL / METAVERSE           ANALYTICS                 HEALTHCARE         │
+│  ┌──────────┐ ┌──────────┐    ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  │  Work    │ │ Gather   │    │ Tableau  │ │  Looker  │ │   Epic   │       │
+│  │ Adventure│ │  .town   │    └──────────┘ └──────────┘ └──────────┘       │
+│  └──────────┘ └──────────┘    ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│  ┌──────────┐ ┌──────────┐    │  Snowflk │ │ Databrcks│ │  Cerner  │       │
+│  │ Mozilla  │ │ Spatial  │    └──────────┘ └──────────┘ └──────────┘       │
+│  │  Hubs    │ │   .io    │                                                  │
+│  └──────────┘ └──────────┘                                                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 Developer Platform
+
+```
+SUBTEXT DEVELOPER ECOSYSTEM
+═══════════════════════════
+
+1. APIs
+   ├── REST API (Primary)
+   ├── GraphQL API (Flexible queries)
+   ├── WebSocket API (Real-time streams)
+   └── gRPC API (High-performance)
+
+2. SDKs
+   ├── JavaScript/TypeScript
+   ├── Python
+   ├── Go
+   ├── Java
+   ├── Swift (iOS)
+   └── Kotlin (Android)
+
+3. EMBEDDED COMPONENTS
+   ├── <subtext-recorder> Web Component
+   ├── <subtext-timeline> Visualization
+   ├── <subtext-hud> Real-time Overlay
+   └── React/Vue/Angular Wrappers
+
+4. WEBHOOK EVENTS
+   ├── session.started
+   ├── session.ended
+   ├── signal.detected (filterable by type)
+   ├── speaker.identified
+   ├── analysis.complete
+   └── alert.triggered
+
+5. OPEN SOURCE
+   ├── subtext-js (Client library)
+   ├── subtext-recorder (Web recorder)
+   ├── signal-atlas-spec (Signal definitions)
+   └── esp-protocol (Emotional State Protocol)
+```
+
+### 7.3 The Emotional State Protocol (ESP) - Open Standard
+
+```yaml
+# ESP v1.0 - Emotional State Protocol
+# Open standard for broadcasting psychological state in WebRTC
+
+esp_message:
+  version: "1.0"
+  timestamp: "2025-11-30T14:23:45.123Z"
+  speaker_id: "uuid"
+
+  # Core emotional state (required)
+  valence: 0.65        # -1 (negative) to +1 (positive)
+  arousal: 0.42        # 0 (calm) to 1 (excited)
+  dominance: 0.55      # 0 (submissive) to 1 (dominant)
+
+  # Extended signals (optional)
+  signals:
+    - type: "micro_tremor"
+      confidence: 0.78
+      intensity: 0.45
+    - type: "speech_acceleration"
+      confidence: 0.92
+      intensity: 0.67
+
+  # Aggregate scores (optional)
+  engagement_score: 0.73
+  stress_index: 0.34
+  authenticity_score: 0.88
+
+  # Privacy controls
+  consent_level: "team"  # 'self', 'team', 'org', 'public'
+  retention: "session"   # 'none', 'session', 'persistent'
+```
+
+---
+
+# PART IV: ENTERPRISE FEATURES
+
+## 8. Security & Compliance
+
+### 8.1 Compliance Certifications (Roadmap)
+
+| Certification | Target Date | Scope |
+|--------------|-------------|-------|
+| SOC 2 Type I | Q2 2026 | All services |
+| SOC 2 Type II | Q4 2026 | All services |
+| GDPR | Launch | EU operations |
+| HIPAA | Q3 2026 | Healthcare vertical |
+| ISO 27001 | Q1 2027 | Global |
+| FedRAMP Moderate | Q4 2027 | Government |
+
+### 8.2 Privacy Architecture
+
+```
+PRIVACY-FIRST DATA FLOW
+═══════════════════════
+
+1. CONSENT LAYER
+   ┌─────────────────────────────────────────┐
+   │  Explicit opt-in per feature:           │
+   │  ├── Basic transcription (required)     │
+   │  ├── Signal analysis (opt-in)           │
+   │  ├── Voice fingerprinting (opt-in)      │
+   │  └── Cross-session learning (opt-in)    │
+   └─────────────────────────────────────────┘
+
+2. DATA MINIMIZATION
+   ┌─────────────────────────────────────────┐
+   │  Audio → Features → Discard Audio       │
+   │  (Raw audio deleted after processing)   │
+   │                                         │
+   │  Retention policies:                    │
+   │  ├── Audio: 24 hours (processing only)  │
+   │  ├── Transcripts: User-controlled       │
+   │  ├── Signals: Aggregated, anonymized    │
+   │  └── Fingerprints: Encrypted, isolated  │
+   └─────────────────────────────────────────┘
+
+3. ENCRYPTION
+   ┌─────────────────────────────────────────┐
+   │  In Transit: TLS 1.3                    │
+   │  At Rest: AES-256-GCM                   │
+   │  Voice Fingerprints: Envelope encryption│
+   │  Key Management: AWS KMS / HashiCorp    │
+   └─────────────────────────────────────────┘
+
+4. EDGE COMPUTE OPTION
+   ┌─────────────────────────────────────────┐
+   │  On-device processing available:        │
+   │  ├── WebAssembly models in browser      │
+   │  ├── iOS/Android on-device inference    │
+   │  └── Edge appliance for enterprise      │
+   │                                         │
+   │  "Zero-knowledge" mode: Audio never     │
+   │  leaves device, only signals transmitted│
+   └─────────────────────────────────────────┘
+```
+
+### 8.3 Enterprise Access Controls
+
+```yaml
+# RBAC Model
+roles:
+  org_admin:
+    - manage_users
+    - manage_billing
+    - configure_integrations
+    - access_all_analytics
+    - manage_data_retention
+
+  team_admin:
+    - manage_team_members
+    - configure_team_settings
+    - access_team_analytics
+
+  analyst:
+    - view_analytics
+    - export_reports
+    - create_dashboards
+
+  member:
+    - record_sessions
+    - view_own_sessions
+    - view_team_aggregate_only
+
+  guest:
+    - view_shared_sessions
+    - no_recording_rights
+
+# Attribute-based access (ABAC)
+policies:
+  - name: "HIPAA-compliant-access"
+    conditions:
+      - user.clearance >= "hipaa_trained"
+      - resource.classification == "phi"
+      - time.within_business_hours == true
+    effect: "allow"
+```
+
+---
+
+## 9. Vertical Solutions
+
+### 9.1 Subtext for Sales
+
+```
+SUBTEXT SALES INTELLIGENCE
+══════════════════════════
+
+DEAL RISK SCORING
+├── Buyer enthusiasm trend (call-over-call)
+├── Decision-maker engagement level
+├── Objection intensity mapping
+├── Commitment signal detection
+└── "Champion vs. Blocker" voice analysis
+
+REAL-TIME COACHING
+├── "Slow down" alerts (talking too fast)
+├── "Listen more" prompts (low question ratio)
+├── Competitor mention detection
+├── Pricing sensitivity markers
+└── Next-best-action suggestions
+
+CRM ENRICHMENT
+├── Auto-populate sentiment fields
+├── Risk score on opportunity
+├── Meeting quality grades
+├── Talk ratio analytics
+└── Follow-up urgency scoring
+
+INTEGRATIONS
+├── Salesforce (native)
+├── HubSpot (native)
+├── Gong (enrichment layer)
+├── Outreach (sequence optimization)
+└── Clari (forecast input)
+```
+
+### 9.2 Subtext for HR & Culture
+
+```
+SUBTEXT PEOPLE INTELLIGENCE
+═══════════════════════════
+
+PSYCHOLOGICAL SAFETY INDEX (PSI)
+├── Team-level aggregated score (1-100)
+├── Trend analysis over time
+├── Benchmark against industry
+├── Anonymized, privacy-first
+└── Action recommendations
+
+BURNOUT EARLY WARNING
+├── Individual deviation from baseline
+├── Energy level trends
+├── Engagement pattern changes
+├── Manager alert thresholds
+└── Suggested interventions
+
+1:1 MEETING INSIGHTS
+├── Talk time balance
+├── Manager listening score
+├── Difficult conversation markers
+├── Action item follow-through
+└── Relationship health trend
+
+CULTURE ANALYTICS
+├── Meeting culture metrics
+├── Interruption patterns by level
+├── Inclusion indicators
+├── Cross-team collaboration health
+└── Leadership communication effectiveness
+```
+
+### 9.3 Subtext for Healthcare (HIPAA)
+
+```
+SUBTEXT CLINICAL INTELLIGENCE
+═════════════════════════════
+
+TELEHEALTH ENHANCEMENT
+├── Patient anxiety detection
+├── Comprehension markers
+├── Medication adherence signals
+├── Pain level indicators (vocal)
+└── Follow-up urgency scoring
+
+PROVIDER WELLNESS
+├── Clinician burnout monitoring
+├── Compassion fatigue markers
+├── Workload stress patterns
+├── Peer support suggestions
+└── Wellness intervention triggers
+
+CLINICAL DOCUMENTATION
+├── Structured note generation
+├── ICD-10 code suggestions
+├── Sentiment timeline for chart
+├── Patient communication summary
+└── Care gap identification
+
+COMPLIANCE
+├── HIPAA BAA included
+├── PHI encryption (field-level)
+├── Audit logging
+├── Role-based access
+└── Data residency (US-only option)
+```
+
+---
+
+# PART V: GO-TO-MARKET
+
+## 10. Growth Engine
+
+### 10.1 Flywheel Model
+
+```
+                    ┌─────────────────┐
+                    │   MORE USERS    │
+                    └────────┬────────┘
+                             │
+                             ▼
+              ┌──────────────────────────┐
+              │  Better Voice Baselines  │
+              │  (Network Effect)        │
+              └────────────┬─────────────┘
+                           │
+                           ▼
+              ┌──────────────────────────┐
+              │  More Accurate Signals   │
+              │  (Product Improvement)   │
+              └────────────┬─────────────┘
+                           │
+                           ▼
+              ┌──────────────────────────┐
+              │  Higher User Value       │
+              │  (Retention + Expansion) │
+              └────────────┬─────────────┘
+                           │
+                           ▼
+              ┌──────────────────────────┐
+              │  Organic + Viral Growth  │
+              │  (Word of Mouth)         │
+              └────────────┬─────────────┘
+                           │
+                           └──────────────┐
+                                          │
+                    ┌─────────────────┐   │
+                    │   MORE USERS    │◄──┘
+                    └─────────────────┘
+```
+
+### 10.2 Channel Strategy
+
+```
+CHANNEL MIX
+═══════════
+
+PRODUCT-LED GROWTH (60%)
+├── Free tier with viral hooks
+├── "Powered by Subtext" badge
+├── Shareable Tension Timelines
+├── Chrome extension distribution
+└── Open-source community
+
+PARTNERSHIPS (25%)
+├── WorkAdventure (co-marketing)
+├── Zoom App Marketplace
+├── Microsoft Teams Store
+├── Slack App Directory
+└── OEM/White-label deals
+
+ENTERPRISE SALES (15%)
+├── Outbound for Fortune 500
+├── Industry events (Dreamforce, etc.)
+├── Analyst relations (Gartner, Forrester)
+├── Customer advisory board
+└── Executive dinners
+```
+
+### 10.3 Pricing Psychology
+
+```
+ANCHORING & VALUE FRAMING
+═════════════════════════
+
+PERSONAL: Free → $9/mo
+├── Anchor: "Otter costs $16/mo for just transcription"
+├── Value: "Add emotional intelligence for less"
+└── Upgrade trigger: Hit 5hr limit
+
+TEAMS: $29/seat/mo
+├── Anchor: "Gong costs $100+/seat"
+├── Value: "Get 80% of the insight at 30% of the cost"
+├── Land: Start with one team
+└── Expand: Usage-based triggers for more teams
+
+ENTERPRISE: Custom ($50-150/seat)
+├── Anchor: "Qualtrics EX costs $200k+/year"
+├── Value: "Real-time culture data vs. annual surveys"
+├── Land: HR pilot
+└── Expand: Sales, Success, all-hands
+
+ROI CALCULATOR
+├── Sales: "Detect 1 at-risk deal = pays for itself"
+├── HR: "Prevent 1 burnout departure = 100x ROI"
+├── Success: "Predict 1 churn = 10x ROI"
+```
+
+---
+
+# PART VI: EXECUTION ROADMAP
+
+## 11. Development Phases
+
+### Phase 0: Foundation (Weeks 1-4)
+```
+DELIVERABLES:
+├── Project scaffolding (Python/FastAPI)
+├── CI/CD pipeline (GitHub Actions)
+├── Development environment (Docker Compose)
+├── Model evaluation framework
+├── Initial Signal Atlas implementation
+└── Proof-of-concept: Single file analysis
+
+TECH STACK DECISIONS:
+├── Backend: Python 3.11+ / FastAPI
+├── ML Pipeline: Ray + MLflow
+├── Database: PostgreSQL + TimescaleDB
+├── Cache: Redis
+├── Queue: Redis Streams (start), Kafka (scale)
+├── Frontend: Next.js 14+ / React
+└── Infra: Terraform + Kubernetes
+```
+
+### Phase 1: Black Box MVP (Weeks 5-12)
+```
+DELIVERABLES:
+├── Web app: File upload + analysis
+├── Core pipeline: Cleanse → Diarize → Transcribe → Analyze
+├── Tension Timeline visualization
+├── Basic signal detection (6 signals)
+├── User authentication (Auth0/Clerk)
+├── Usage tracking + billing foundation
+└── Public launch: subtext.live
+
+SUCCESS METRICS:
+├── 1,000 files analyzed
+├── <30s processing for 5min audio
+├── 85%+ signal detection accuracy
+└── NPS > 40
+```
+
+### Phase 2: Live Wire (Weeks 13-24)
+```
+DELIVERABLES:
+├── Real-time WebRTC streaming
+├── Live transcript + signal overlay
+├── Browser extension (Chrome/Firefox)
+├── Mobile apps (React Native)
+├── API v1.0 (REST + WebSocket)
+├── First integrations (Zoom, Slack)
+├── Team features + dashboard
+└── Paid tiers launch
+
+SUCCESS METRICS:
+├── 10,000 MAU
+├── <500ms end-to-end latency
+├── $50K ARR
+├── 3 enterprise pilots
+└── 20 API developers
+```
+
+### Phase 3: Social Layer (Weeks 25-40)
+```
+DELIVERABLES:
+├── WorkAdventure integration (flagship)
+├── Gather.town, Mozilla Hubs integrations
+├── Voice fingerprinting (opt-in)
+├── Cross-session insights
+├── ESP protocol v1.0 release
+├── Partner marketplace
+├── Vertical solutions (Sales, HR)
+└── SOC 2 Type I certification
+
+SUCCESS METRICS:
+├── 100,000 MAU
+├── $500K ARR
+├── 20 enterprise customers
+├── 100+ API integrations
+├── ESP adopted by 3+ platforms
+└── Series A ready
+```
+
+### Phase 4: Scale & Defend (Weeks 41-52+)
+```
+DELIVERABLES:
+├── Advanced ML models (custom training)
+├── Predictive analytics (churn, risk)
+├── On-premise / edge deployment
+├── Healthcare vertical (HIPAA)
+├── International expansion
+├── SOC 2 Type II
+├── Partner ecosystem maturity
+└── Category leadership
+
+SUCCESS METRICS:
+├── 1M+ MAU
+├── $5M ARR
+├── 100 enterprise customers
+├── Industry recognition (Gartner MQ)
+└── Defensible moat established
+```
+
+---
+
+## 12. Success Metrics Framework
+
+### 12.1 North Star Metrics
+
+| Metric | Definition | Target (Y1) |
+|--------|------------|-------------|
+| **Signal Minutes Analyzed** | Total audio minutes processed | 10M min/month |
+| **Insight Actions** | User actions taken from signals | 100K/month |
+| **Developer API Calls** | Platform adoption | 1M calls/month |
+
+### 12.2 Product Metrics
+
+```
+ACQUISITION
+├── Website visitors
+├── Free signups
+├── Activation rate (first analysis complete)
+└── Time to first value
+
+ENGAGEMENT
+├── DAU/MAU ratio
+├── Sessions per user
+├── Minutes analyzed per user
+├── Signal types explored
+└── Feature adoption by tier
+
+RETENTION
+├── D1, D7, D30 retention
+├── Monthly churn rate
+├── Net revenue retention
+└── Cohort analysis
+
+MONETIZATION
+├── Free-to-paid conversion
+├── ARPU by segment
+├── Expansion revenue %
+├── LTV/CAC ratio
+└── Payback period
+
+ADVOCACY
+├── NPS score
+├── Referral rate
+├── Social shares
+├── Community contributions
+└── Case study participation
+```
+
+---
+
+# APPENDIX
+
+## A. Competitive Intelligence
+
+```
+COMPETITOR MATRIX
+═════════════════
+
+                    │ Transcription │ Emotion │ Real-time │ Spatial │ Privacy
+────────────────────┼───────────────┼─────────┼───────────┼─────────┼─────────
+Otter.ai            │      ★★★★★    │    ★    │    ★★★    │    -    │   ★★
+Gong                │      ★★★★     │   ★★★   │     ★     │    -    │   ★★
+Chorus (ZoomInfo)   │      ★★★★     │   ★★    │     ★     │    -    │   ★★
+Fireflies           │      ★★★★     │    ★    │    ★★     │    -    │   ★★
+Grain               │      ★★★      │    ★    │    ★★     │    -    │  ★★★
+────────────────────┼───────────────┼─────────┼───────────┼─────────┼─────────
+SUBTEXT             │      ★★★★     │  ★★★★★  │   ★★★★★   │  ★★★★★  │ ★★★★★
+```
+
+## B. Risk Register
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Accuracy below threshold | Medium | High | Continuous model training; human-in-loop |
+| Privacy backlash | Medium | High | Privacy-first architecture; opt-in only |
+| Competitor fast-follow | High | Medium | Speed to market; open standard moat |
+| Enterprise sales cycle | High | Medium | PLG foundation; strong free tier |
+| Model costs at scale | Medium | Medium | Edge compute; model optimization |
+| Key person dependency | Medium | High | Documentation; team expansion |
+
+## C. Team Requirements (Next 12 Months)
+
+```
+CORE TEAM
+├── CEO/Founder (existing)
+├── CTO (hire)
+├── ML Engineer x2
+├── Backend Engineer x2
+├── Frontend Engineer x1
+├── DevOps/SRE x1
+├── Product Manager x1
+├── Designer x1
+└── GTM Lead x1
+
+ADVISORS
+├── Audio/Speech ML expert
+├── Enterprise sales veteran
+├── Privacy/compliance counsel
+└── Spatial computing insider
+```
+
+---
+
+**Document Version:** 1.0
+**Last Updated:** 2025-11-30
+**Classification:** Internal Strategic Document
+**Next Review:** After Phase 1 completion
+
+---
+
+*"The future of communication is not what we say—it's what we reveal."*

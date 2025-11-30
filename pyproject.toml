@@ -1,0 +1,141 @@
+[project]
+name = "subtext"
+version = "0.1.0"
+description = "Metacognitive Engine - Read the room, not just the transcript"
+readme = "README.md"
+license = { text = "AGPL-3.0" }
+requires-python = ">=3.11"
+authors = [
+    { name = "MADFAM", email = "dev@madfam.io" }
+]
+keywords = ["audio", "speech", "emotion", "nlp", "ai", "psychometrics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # Web Framework
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "python-multipart>=0.0.6",
+    "websockets>=12.0",
+
+    # Database
+    "sqlalchemy[asyncio]>=2.0.25",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "redis>=5.0.0",
+
+    # Job Queue
+    "arq>=0.26.0",
+
+    # ML/Audio Processing - Core
+    "torch>=2.1.0",
+    "torchaudio>=2.1.0",
+    "transformers>=4.36.0",
+    "librosa>=0.10.1",
+    "soundfile>=0.12.1",
+
+    # Noise Suppression: DeepFilterNet (SOTA real-time)
+    "deepfilternet>=0.5.6",
+
+    # Speaker Diarization: Pyannote 3.1+
+    "pyannote.audio>=3.1.0",
+
+    # Speaker Embeddings: SpeechBrain ECAPA-TDNN (1.71% EER)
+    "speechbrain>=1.0.0",
+
+    # ASR: WhisperX (Whisper large-v3 with word-level alignment)
+    "openai-whisper>=20231117",
+    "whisperx>=3.1.1",
+
+    # Speech Emotion Recognition: Emotion2Vec via FunASR (SOTA on 9 datasets)
+    "funasr>=1.0.0",
+    "modelscope>=1.10.0",
+
+    # LLM Integration
+    "openai>=1.10.0",
+    "anthropic>=0.18.0",
+    "ollama>=0.1.6",
+
+    # Auth (Janua Integration)
+    "httpx>=0.26.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+
+    # Billing (Stripe)
+    "stripe>=8.0.0",
+
+    # Email (Resend)
+    "resend>=0.7.0",
+
+    # CLI
+    "click>=8.1.0",
+    "rich>=13.0.0",
+
+    # Utilities
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "structlog>=24.1.0",
+    "python-dotenv>=1.0.0",
+    "boto3>=1.34.0",
+    "tenacity>=8.2.0",
+    "orjson>=3.9.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.26.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+]
+gpu = [
+    "torch>=2.1.0",
+]
+# NVIDIA NeMo for production ASR (Canary, Parakeet) and speaker verification (TitaNet)
+nemo = [
+    "nemo_toolkit[asr]>=2.0.0",
+]
+# Full production stack with all ML capabilities
+full = [
+    "nemo_toolkit[asr]>=2.0.0",
+    "onnxruntime-gpu>=1.16.0",
+]
+
+[project.scripts]
+subtext = "subtext.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/subtext"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=src/subtext --cov-report=term-missing"
