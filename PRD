@@ -1,0 +1,118 @@
+This is the official Product Requirements Document (PRD) for **Subtext**, effectively initializing the build phase. We are locking in the "Psychometric/Contextual" strategic pivot and utilizing the **BMAD** framework to structure the development lifecycle.
+
+**Project Name:** Subtext
+**Domain:** [subtext.live](https://subtext.live)
+**Framework:** BMAD (Business, Market, Architecture, Deliverables)
+**Version:** 0.1.0 (Initialization)
+
+-----
+
+## 1\. B - Business Case
+
+**"The Problem of Digital Flatness"**
+In the shift to digital communication, we have gained efficiency but lost humanity. Current meeting tools (Otter, Teams Recap, Fireflies) function as court stenographers—they capture the *text*. However, 90% of human communication is non-verbal (prosody, hesitation, pitch, silence).
+
+  * **The Gap:** Remote teams cannot "read the room." Negotiators miss "tells." HR misses burnout signals.
+  * **The Opportunity:** Audio data contains rich "Information Leakage"—biological and psychological cues that reveal the speaker's true state of mind.
+
+**The Solution: Subtext**
+`Subtext.live` is an open-source "Metacognitive Engine" that ingests audio/video to analyze not just *what* is said, but *how* it is said. It provides "EQ Augmentation" (Emotional Intelligence) for the Spatial Web.
+
+**Core Value Proposition:**
+
+> "Don't just read the transcript. Read the room."
+
+-----
+
+## 2\. M - Market Strategy (Blue Ocean)
+
+We are exiting the "Transcription Utility" market (Red Ocean) and creating the "Conversational Intelligence" market (Blue Ocean).
+
+| Feature | Competitors (Otter/Gong) | **Subtext (Blue Ocean)** |
+| :--- | :--- | :--- |
+| **Primary Unit** | The Word (Text) | **The Signal (Bio-acoustic)** |
+| **Output** | Summary & Action Items | **Psychometric Profile & Vibe Heatmap** |
+| **Timing** | Post-Meeting Review | **Live "Heads-Up Display" (HUD)** |
+| **Context** | Static Files | **Spatial/Social (WorkAdventure)** |
+| **Privacy** | Cloud Black Box | **Sovereign/Open Source (Local-First)** |
+
+**Target Niche:**
+
+1.  **Spatial Communities:** WorkAdventure/Metaverse users who need visual feedback for audio dynamics (e.g., an avatar glowing red when the user sounds stressed).
+2.  **High-Stakes Remote:** Sales negotiators and executive recruiters looking for "hesitation metrics" and "truthfulness markers."
+
+-----
+
+## 3\. A - Architecture
+
+The system is designed as a **"Pipeline of Pipelines"** focusing on modularity to allow swapping of open-source models.
+
+### 3.1 High-Level Stack
+
+  * **Ingestion Layer:**
+      * **Live:** WebRTC stream handling (Browser-based via `subtext.live`).
+      * **Bot:** Headless client (Puppeteer/Selenium) to join Zoom/Teams calls.
+  * **The "Cleanse" (Pre-processing):**
+      * *Model:* `DeepFilterNet` (Low latency noise suppression).
+      * *Goal:* Remove noise *without* stripping emotional prosody (jitter/shimmer).
+  * **The "Identity" (Diarization):**
+      * *Model:* `Pyannote.audio 3.0`.
+      * *Goal:* Precise "Who is speaking when" segmentation.
+  * **The "Lyrics" (Transcription):**
+      * *Model:* `WhisperX` (optimized for word-level timestamps).
+  * **The "Music" (Acoustic Meta-Analysis):**
+      * *Model:* `Wav2Vec 2.0` (fine-tuned on SER - Speech Emotion Recognition) or `Hubert`.
+      * *Metrics Extraction:* Pitch variability, speech rate (WPM), silence duration (latency to respond), interrupt velocity.
+  * **The "Synthesis" (LLM Reasoning):**
+      * *Model:* `Llama-3` or `Mixtral` (Self-hosted or API).
+      * *Prompt Strategy:* "Analyze the discrepancy between the text (polite) and the audio (stressed)."
+
+### 3.2 Integration Architecture (The Spatial Link)
+
+  * **WorkAdventure Bridge:** A WebSocket server that pushes real-time JSON payloads to the WorkAdventure Map API.
+      * *Effect:* Modifies `variable` layers in the map (e.g., changing the color of a meeting room carpet based on the "tension" of the conversation).
+
+-----
+
+## 4\. D - Deliverables & Roadmap
+
+### Phase 1: "The Black Box" (MVP)
+
+**Goal:** Prove we can extract "Hidden Info" from a static file.
+
+  * **Input:** Drag-and-drop audio file interface at `subtext.live`.
+  * **Processing:**
+      * Clean audio.
+      * Separate speakers (Speaker A vs. B).
+      * Transcribe.
+  * **Output:** A "Tension Timeline" Graph.
+      * *Visual:* A waveform colored by emotion (Green=Calm, Red=Aggressive, Grey=Disengaged).
+      * *Metric:* "Interruption Count" per speaker.
+
+### Phase 2: "The Live Wire" (Real-Time)
+
+**Goal:** Handle live streams and simple meta-analysis.
+
+  * **Feature:** "Live Microphone" input on the web app.
+  * **Feature:** Real-time scrolling transcript with "Vibe Tags" (e.g., `[Sarcasm Detected]`, `[Long Pause]`).
+  * **Tech:** Implementation of WebSockets for streaming audio chunks to the backend.
+
+### Phase 3: "The Social Layer" (Integrations)
+
+**Goal:** Connect to where people work.
+
+  * **WorkAdventure:** Avatars emit "bubbles" or change sprite states based on voice analysis.
+  * **Discord/Slack:** A bot that generates a "Psych Safety Score" at the end of a huddle.
+
+-----
+
+### Immediate Next Step (The "Build")
+
+To make this PRD real, we need to prove the core hypothesis: **That we can overlay emotional data onto text data using open-source tools.**
+
+**Shall I generate a Python "Proof of Concept" script that:**
+
+1.  Takes a sample audio file.
+2.  Runs it through `Whisper` (for text).
+3.  Runs it through `Pyannote` (for speaker segments).
+4.  **Crucially:** Extracts the *pitch/volume* dynamics for each segment to flag "High Intensity" moments?
