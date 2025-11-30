@@ -15,7 +15,7 @@ from fastapi.responses import ORJSONResponse
 from subtext import __version__
 from subtext.config import settings
 
-from .routes import auth, billing, health, sessions, signals, webhooks
+from .routes import auth, billing, health, realtime, sessions, signals, webhooks
 
 logger = structlog.get_logger()
 
@@ -45,12 +45,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await init_redis()
 
+    # Initialize ESP broadcaster
+    from subtext.realtime.broadcaster import broadcaster as esp_broadcaster
+
+    await esp_broadcaster.start()
+
     logger.info("Subtext API started successfully")
 
     yield
 
     # Shutdown
     logger.info("Shutting down Subtext API")
+
+    # Stop ESP broadcaster
+    await esp_broadcaster.stop()
+
     await close_db()
     await close_redis()
     logger.info("Subtext API shutdown complete")
@@ -149,6 +158,13 @@ def create_app() -> FastAPI:
         webhooks.router,
         prefix=f"{api_prefix}/webhooks",
         tags=["Webhooks"],
+    )
+
+    # WebSocket routes
+    app.include_router(
+        realtime.router,
+        prefix="/ws",
+        tags=["Realtime"],
     )
 
     return app

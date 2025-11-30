@@ -31,6 +31,9 @@ dependencies = [
     "alembic>=1.13.0",
     "redis>=5.0.0",
 
+    # Job Queue
+    "arq>=0.26.0",
+
     # ML/Audio Processing - Core
     "torch>=2.1.0",
     "torchaudio>=2.1.0",

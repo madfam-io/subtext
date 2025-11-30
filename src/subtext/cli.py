@@ -68,11 +68,29 @@ def serve(host: str, port: int, reload: bool, workers: int) -> None:
 @cli.command()
 @click.option("--host", default="0.0.0.0", help="Host to bind to")
 @click.option("--port", default=8001, help="Port to bind to")
-def realtime(host: str, port: int) -> None:
-    """Start the realtime WebSocket server for live audio processing."""
-    click.echo(f"Starting Subtext Realtime on {host}:{port}")
-    click.echo("(Realtime server not yet implemented)")
-    # TODO: Implement realtime WebSocket server
+@click.option("--reload/--no-reload", default=False, help="Enable auto-reload")
+def realtime(host: str, port: int, reload: bool) -> None:
+    """Start the realtime WebSocket server for live audio processing.
+
+    The realtime server handles WebSocket connections for:
+    - Live audio streaming and processing
+    - ESP (Emotional State Protocol) broadcasting
+    - Real-time transcription and signal detection
+    """
+    import uvicorn
+
+    click.echo(f"Starting Subtext Realtime WebSocket server on ws://{host}:{port}")
+    click.echo("Endpoints:")
+    click.echo(f"  - ws://{host}:{port}/ws/realtime")
+    click.echo(f"  - ws://{host}:{port}/ws/esp/subscribe/{{session_id}}")
+
+    uvicorn.run(
+        "subtext.api.app:create_app",
+        host=host,
+        port=port,
+        reload=reload,
+        factory=True,
+    )
 
 
 # ══════════════════════════════════════════════════════════════
@@ -265,36 +283,100 @@ def db_downgrade(revision: str) -> None:
 # ══════════════════════════════════════════════════════════════
 
 
-@cli.command()
-@click.option("--concurrency", "-c", default=3, help="Number of concurrent tasks")
-@click.option("--queue", "-q", default="default", help="Queue to process")
-def worker(concurrency: int, queue: str) -> None:
-    """Start a background worker for pipeline processing."""
-    click.echo(f"Starting Subtext worker (concurrency={concurrency}, queue={queue})")
+@cli.group()
+def worker() -> None:
+    """Background worker commands."""
+    pass
 
-    async def run_worker():
-        from subtext.db import init_db, close_db
-        from subtext.db.redis import get_redis
 
-        await init_db()
-        redis = await get_redis()
+@worker.command("start")
+@click.option("--concurrency", "-c", default=None, type=int, help="Max concurrent jobs")
+@click.option(
+    "--queue", "-q",
+    type=click.Choice(["high", "default", "low"]),
+    default="default",
+    help="Queue to process",
+)
+@click.option("--burst/--no-burst", default=False, help="Exit when queue is empty")
+def worker_start(concurrency: int | None, queue: str, burst: bool) -> None:
+    """Start an ARQ background worker for pipeline processing."""
+    from arq import run_worker as arq_run_worker
+    from subtext.worker.queue import get_worker_settings, QUEUE_NAMES, JobPriority
 
-        click.echo("Worker ready. Waiting for tasks...")
+    click.echo(f"Starting Subtext ARQ worker (queue={queue})")
 
-        try:
-            while True:
-                # Poll for tasks
-                task = await redis.blpop(f"subtext:queue:{queue}", timeout=5)
-                if task:
-                    _, task_data = task
-                    click.echo(f"Processing task: {task_data}")
-                    # TODO: Process task
-        except KeyboardInterrupt:
-            click.echo("\nShutting down worker...")
-        finally:
-            await close_db()
+    settings_dict = get_worker_settings()
 
-    asyncio.run(run_worker())
+    # Override queue if specified
+    priority = {"high": JobPriority.HIGH, "default": JobPriority.NORMAL, "low": JobPriority.LOW}
+    settings_dict["queue_name"] = QUEUE_NAMES[priority[queue]]
+
+    # Override concurrency if specified
+    if concurrency:
+        settings_dict["max_jobs"] = concurrency
+
+    # Burst mode for CI/testing
+    if burst:
+        settings_dict["burst"] = True
+
+    click.echo(f"Worker starting with settings: queue={settings_dict['queue_name']}, max_jobs={settings_dict['max_jobs']}")
+
+    arq_run_worker(settings_dict)
+
+
+@worker.command("enqueue")
+@click.argument("task_name")
+@click.option("--session-id", "-s", required=True, help="Session ID to process")
+@click.option("--priority", "-p", type=click.Choice(["high", "normal", "low"]), default="normal")
+def worker_enqueue(task_name: str, session_id: str, priority: str) -> None:
+    """Manually enqueue a task for processing."""
+    from subtext.worker.queue import enqueue_job, JobPriority
+
+    priority_map = {
+        "high": JobPriority.HIGH,
+        "normal": JobPriority.NORMAL,
+        "low": JobPriority.LOW,
+    }
+
+    async def enqueue():
+        job_id = await enqueue_job(
+            task_name,
+            session_id=session_id,
+            priority=priority_map[priority],
+        )
+        if job_id:
+            click.echo(f"Task enqueued: {job_id}")
+        else:
+            click.echo("Failed to enqueue task", err=True)
+            sys.exit(1)
+
+    asyncio.run(enqueue())
+
+
+@worker.command("status")
+@click.argument("job_id", required=False)
+def worker_status(job_id: str | None) -> None:
+    """Check worker/job status."""
+    from subtext.worker.queue import get_job_status, get_redis_pool
+
+    async def check_status():
+        if job_id:
+            status = await get_job_status(job_id)
+            if status:
+                click.echo(f"Job: {status['job_id']}")
+                click.echo(f"  Status: {status['status']}")
+                if status['result']:
+                    click.echo(f"  Result: {status['result']}")
+            else:
+                click.echo(f"Job not found: {job_id}")
+        else:
+            # Show queue stats
+            pool = await get_redis_pool()
+            info = await pool.info()
+            click.echo("ARQ Worker Status")
+            click.echo(f"  Connected: {info is not None}")
+
+    asyncio.run(check_status())
 
 
 # ══════════════════════════════════════════════════════════════

@@ -160,6 +160,14 @@ class Settings(BaseSettings):
     rate_limit_burst: int = 20
 
     # ══════════════════════════════════════════════════════════════
+    # Worker Configuration (ARQ)
+    # ══════════════════════════════════════════════════════════════
+    worker_max_jobs: int = 10
+    worker_job_timeout: int = 3600  # 1 hour max per job
+    worker_preload_models: bool = True
+    worker_concurrency: int = 3
+
+    # ══════════════════════════════════════════════════════════════
     # Feature Flags
     # ══════════════════════════════════════════════════════════════
     feature_voice_fingerprinting: bool = False
