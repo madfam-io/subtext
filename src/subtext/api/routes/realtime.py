@@ -52,18 +52,38 @@ async def authenticate_websocket(
     Authenticate WebSocket connection.
 
     Returns (user_id, org_id) tuple.
-    For now, allows anonymous connections for development.
+    Allows anonymous connections if no token provided (for development).
     """
-    # TODO: Integrate with Janua authentication
-    # In production, validate the token and extract user/org IDs
+    from subtext.integrations.janua import JanuaAuth
+    from subtext.config import settings
 
-    if token:
-        # Placeholder for token validation
-        # Would call Janua API to validate token
-        pass
+    if not token:
+        # Allow anonymous connections in development
+        if settings.app_env == "development":
+            return None, None
+        # In production, require authentication
+        return None, None
 
-    # For development, allow anonymous connections
-    return None, None
+    try:
+        # Create a temporary auth handler and verify the token
+        auth = JanuaAuth()
+        payload = await auth._verify_token(token)
+
+        # Extract user and org IDs from the token payload
+        user_id = UUID(payload.sub) if payload.sub else None
+        org_id = UUID(payload.org_id) if payload.org_id else None
+
+        logger.info(
+            "WebSocket authenticated",
+            user_id=str(user_id) if user_id else None,
+            org_id=str(org_id) if org_id else None,
+        )
+        return user_id, org_id
+
+    except Exception as e:
+        logger.warning("WebSocket authentication failed", error=str(e))
+        # Allow connection but without authentication
+        return None, None
 
 
 # ══════════════════════════════════════════════════════════════
