@@ -319,7 +319,7 @@ class StripeClient:
         quantity: int,
         timestamp: int | None = None,
         action: str = "increment",
-    ) -> stripe.UsageRecord:
+    ) -> Any:
         """Report usage for metered billing (API tier)."""
         params: dict[str, Any] = {
             "quantity": quantity,
@@ -336,7 +336,7 @@ class StripeClient:
     @staticmethod
     async def get_usage_summary(
         subscription_item_id: str,
-    ) -> list[stripe.UsageRecordSummary]:
+    ) -> list[Any]:
         """Get usage summary for a subscription item."""
         summaries = stripe.SubscriptionItem.list_usage_record_summaries(
             subscription_item_id,

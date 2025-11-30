@@ -193,7 +193,7 @@ class SessionModel(Base, UUIDMixin, TimestampMixin):
 
     # Settings and metadata
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
-    metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    session_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -566,7 +566,7 @@ class UsageRecordModel(Base, UUIDMixin):
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
 
     # Metadata
-    metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    usage_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     # Stripe reporting
     stripe_reported: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

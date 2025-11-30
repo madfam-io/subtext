@@ -9,16 +9,28 @@ import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import UUID
 
 import numpy as np
 import structlog
-import torch
 
 from subtext.config import settings
 
+# Lazy import torch to allow testing without ML dependencies
+if TYPE_CHECKING:
+    import torch as torch_type
+
 logger = structlog.get_logger()
+
+
+def _import_torch():
+    """Lazy import torch to allow testing without ML dependencies."""
+    try:
+        import torch
+        return torch
+    except ImportError:
+        return None
 
 
 # ══════════════════════════════════════════════════════════════
@@ -132,6 +144,9 @@ class CleanseStage(PipelineStage):
         # Apply noise suppression if model available
         if self._model is not None:
             try:
+                torch = _import_torch()
+                if torch is None:
+                    raise ImportError("torch not available")
                 # Convert to tensor
                 audio_tensor = torch.from_numpy(audio).float().unsqueeze(0)
 
@@ -212,6 +227,12 @@ class VADStage(PipelineStage):
         if self._initialized:
             return
 
+        torch = _import_torch()
+        if torch is None:
+            logger.warning("torch not available, VAD disabled")
+            self._initialized = True
+            return
+
         try:
             # Load Silero VAD from torch hub
             model, utils = torch.hub.load(
@@ -259,6 +280,9 @@ class VADStage(PipelineStage):
             }
 
         try:
+            torch = _import_torch()
+            if torch is None:
+                raise ImportError("torch not available")
             # Convert to tensor
             audio_tensor = torch.from_numpy(audio).float()
 
@@ -359,7 +383,8 @@ class DiarizeStage(PipelineStage):
             )
 
             # Use GPU if available
-            if torch.cuda.is_available():
+            torch = _import_torch()
+            if torch and torch.cuda.is_available():
                 self._pipeline.to(torch.device("cuda"))
 
             logger.info("Pyannote diarization initialized", model=self.model_name)
@@ -372,10 +397,12 @@ class DiarizeStage(PipelineStage):
             try:
                 from speechbrain.inference.speaker import EncoderClassifier
 
+                torch = _import_torch()
+                device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
                 self._embedding_pipeline = EncoderClassifier.from_hparams(
                     source=self.embedding_model,
                     savedir=f"{settings.model_cache_dir}/ecapa-tdnn",
-                    run_opts={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+                    run_opts={"device": device},
                 )
 
                 logger.info(
@@ -483,6 +510,9 @@ class DiarizeStage(PipelineStage):
 
                         # Extract embedding
                         try:
+                            torch = _import_torch()
+                            if torch is None:
+                                raise ImportError("torch not available")
                             audio_tensor = torch.from_numpy(combined).float().unsqueeze(0)
                             embedding = self._embedding_pipeline.encode_batch(audio_tensor)
                             embeddings[speaker_id] = embedding.squeeze().cpu().tolist()
@@ -563,7 +593,8 @@ class TranscribeStage(PipelineStage):
         if self._initialized:
             return
 
-        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        torch = _import_torch()
+        self._device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
 
         if self.backend == "whisperx":
             await self._init_whisperx()
@@ -838,7 +869,11 @@ class EmotionStage(PipelineStage):
     ):
         self.model_name = model_name
         self.granularity = granularity
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        if device:
+            self.device = device
+        else:
+            torch = _import_torch()
+            self.device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
         self._model = None
         self._initialized = False
 
