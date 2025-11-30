@@ -1,0 +1,2574 @@
+# SUBTEXT TECHNICAL SPECIFICATION
+## Implementation Blueprint v1.0
+
+---
+
+# 1. PROJECT STRUCTURE
+
+```
+subtext/
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml                    # Continuous integration
+│   │   ├── cd-staging.yml            # Deploy to staging
+│   │   ├── cd-production.yml         # Deploy to production
+│   │   └── model-benchmark.yml       # ML model performance tests
+│   ├── ISSUE_TEMPLATE/
+│   └── PULL_REQUEST_TEMPLATE.md
+│
+├── docs/
+│   ├── api/                          # API documentation (OpenAPI)
+│   ├── architecture/                 # Architecture decision records
+│   ├── runbooks/                     # Operational runbooks
+│   └── signal-atlas/                 # Signal definitions
+│
+├── infrastructure/
+│   ├── terraform/
+│   │   ├── modules/
+│   │   │   ├── eks/                  # Kubernetes cluster
+│   │   │   ├── rds/                  # PostgreSQL + TimescaleDB
+│   │   │   ├── redis/                # Cache layer
+│   │   │   ├── s3/                   # Object storage
+│   │   │   └── vpc/                  # Network configuration
+│   │   ├── environments/
+│   │   │   ├── dev/
+│   │   │   ├── staging/
+│   │   │   └── production/
+│   │   └── main.tf
+│   ├── kubernetes/
+│   │   ├── base/                     # Kustomize base
+│   │   ├── overlays/                 # Environment overlays
+│   │   └── helm/                     # Helm charts
+│   └── docker/
+│       ├── api.Dockerfile
+│       ├── worker.Dockerfile
+│       ├── ml-inference.Dockerfile
+│       └── web.Dockerfile
+│
+├── packages/                         # Monorepo packages
+│   ├── core/                         # Shared business logic
+│   │   ├── src/
+│   │   │   ├── signals/              # Signal definitions & detection
+│   │   │   ├── models/               # Domain models
+│   │   │   └── utils/                # Shared utilities
+│   │   ├── pyproject.toml
+│   │   └── tests/
+│   │
+│   ├── api/                          # FastAPI backend
+│   │   ├── src/
+│   │   │   ├── routes/
+│   │   │   │   ├── auth.py
+│   │   │   │   ├── sessions.py
+│   │   │   │   ├── analysis.py
+│   │   │   │   ├── signals.py
+│   │   │   │   ├── webhooks.py
+│   │   │   │   └── admin.py
+│   │   │   ├── services/
+│   │   │   │   ├── audio_processor.py
+│   │   │   │   ├── signal_detector.py
+│   │   │   │   ├── llm_synthesizer.py
+│   │   │   │   └── notification.py
+│   │   │   ├── middleware/
+│   │   │   ├── dependencies/
+│   │   │   └── main.py
+│   │   ├── pyproject.toml
+│   │   └── tests/
+│   │
+│   ├── pipeline/                     # ML processing pipeline
+│   │   ├── src/
+│   │   │   ├── stages/
+│   │   │   │   ├── cleanse.py        # DeepFilterNet
+│   │   │   │   ├── diarize.py        # Pyannote
+│   │   │   │   ├── transcribe.py     # WhisperX
+│   │   │   │   ├── prosodics.py      # Wav2Vec2 features
+│   │   │   │   ├── semantics.py      # LLM analysis
+│   │   │   │   └── synthesize.py     # Final fusion
+│   │   │   ├── workers/
+│   │   │   │   ├── file_worker.py
+│   │   │   │   ├── stream_worker.py
+│   │   │   │   └── batch_worker.py
+│   │   │   ├── orchestrator.py
+│   │   │   └── models/               # ML model wrappers
+│   │   ├── pyproject.toml
+│   │   └── tests/
+│   │
+│   ├── realtime/                     # WebSocket + WebRTC
+│   │   ├── src/
+│   │   │   ├── websocket_server.py
+│   │   │   ├── webrtc_handler.py
+│   │   │   ├── stream_processor.py
+│   │   │   └── esp_broadcaster.py    # Emotional State Protocol
+│   │   ├── pyproject.toml
+│   │   └── tests/
+│   │
+│   ├── web/                          # Next.js frontend
+│   │   ├── src/
+│   │   │   ├── app/                  # App router
+│   │   │   ├── components/
+│   │   │   │   ├── TensionTimeline/
+│   │   │   │   ├── SignalOverlay/
+│   │   │   │   ├── PsychDashboard/
+│   │   │   │   └── AudioRecorder/
+│   │   │   ├── hooks/
+│   │   │   ├── lib/
+│   │   │   └── styles/
+│   │   ├── package.json
+│   │   └── tests/
+│   │
+│   └── sdk/                          # Public SDKs
+│       ├── javascript/
+│       ├── python/
+│       └── go/
+│
+├── models/                           # ML model artifacts
+│   ├── checkpoints/
+│   ├── configs/
+│   └── scripts/
+│       ├── train_ser.py              # Speech emotion recognition
+│       ├── finetune_whisper.py
+│       └── evaluate.py
+│
+├── scripts/
+│   ├── setup-dev.sh
+│   ├── run-pipeline.sh
+│   └── benchmark.py
+│
+├── docker-compose.yml                # Local development
+├── pyproject.toml                    # Root Python config
+├── package.json                      # Root Node config
+├── Makefile
+└── README.md
+```
+
+---
+
+# 2. API SPECIFICATION
+
+## 2.1 REST API (OpenAPI 3.0)
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Subtext API
+  version: 1.0.0
+  description: |
+    The Subtext API provides programmatic access to conversational intelligence
+    and emotional signal detection capabilities.
+
+servers:
+  - url: https://api.subtext.live/v1
+    description: Production
+  - url: https://api.staging.subtext.live/v1
+    description: Staging
+
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  # ══════════════════════════════════════════════════════════════
+  # SESSIONS
+  # ══════════════════════════════════════════════════════════════
+  /sessions:
+    post:
+      summary: Create analysis session
+      operationId: createSession
+      tags: [Sessions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+    get:
+      summary: List sessions
+      operationId: listSessions
+      tags: [Sessions]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, completed, failed]
+      responses:
+        '200':
+          description: Session list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionList'
+
+  /sessions/{sessionId}:
+    get:
+      summary: Get session details
+      operationId: getSession
+      tags: [Sessions]
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionDetail'
+
+  /sessions/{sessionId}/upload:
+    post:
+      summary: Upload audio file for analysis
+      operationId: uploadAudio
+      tags: [Sessions]
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                metadata:
+                  type: object
+      responses:
+        '202':
+          description: Upload accepted, processing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessingJob'
+
+  # ══════════════════════════════════════════════════════════════
+  # ANALYSIS
+  # ══════════════════════════════════════════════════════════════
+  /sessions/{sessionId}/transcript:
+    get:
+      summary: Get session transcript
+      operationId: getTranscript
+      tags: [Analysis]
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, srt, vtt, txt]
+            default: json
+      responses:
+        '200':
+          description: Transcript data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transcript'
+
+  /sessions/{sessionId}/signals:
+    get:
+      summary: Get detected signals
+      operationId: getSignals
+      tags: [Analysis]
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+        - name: type
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: Filter by signal type
+        - name: min_confidence
+          in: query
+          schema:
+            type: number
+            minimum: 0
+            maximum: 1
+            default: 0.5
+        - name: speaker_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Signal events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalList'
+
+  /sessions/{sessionId}/timeline:
+    get:
+      summary: Get tension timeline data
+      operationId: getTimeline
+      tags: [Analysis]
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+        - name: resolution
+          in: query
+          schema:
+            type: string
+            enum: [1s, 5s, 10s, 30s]
+            default: 5s
+      responses:
+        '200':
+          description: Timeline data points
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Timeline'
+
+  /sessions/{sessionId}/insights:
+    get:
+      summary: Get AI-generated insights
+      operationId: getInsights
+      tags: [Analysis]
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+      responses:
+        '200':
+          description: Session insights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Insights'
+
+  # ══════════════════════════════════════════════════════════════
+  # REAL-TIME
+  # ══════════════════════════════════════════════════════════════
+  /realtime/connect:
+    get:
+      summary: Establish WebSocket connection
+      operationId: connectRealtime
+      tags: [Realtime]
+      description: |
+        WebSocket endpoint for real-time audio streaming and signal detection.
+
+        **Connection URL:** `wss://realtime.subtext.live/v1/connect`
+
+        **Message Types:**
+        - `audio_chunk`: Send audio data (base64 PCM)
+        - `signal`: Receive detected signals
+        - `transcript`: Receive transcript updates
+        - `esp`: Receive Emotional State Protocol messages
+
+  # ══════════════════════════════════════════════════════════════
+  # WEBHOOKS
+  # ══════════════════════════════════════════════════════════════
+  /webhooks:
+    post:
+      summary: Register webhook endpoint
+      operationId: createWebhook
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    sessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    # ────────────────────────────────────────────────────────────
+    # Session Schemas
+    # ────────────────────────────────────────────────────────────
+    CreateSessionRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        settings:
+          $ref: '#/components/schemas/SessionSettings'
+        metadata:
+          type: object
+
+    SessionSettings:
+      type: object
+      properties:
+        language:
+          type: string
+          default: "auto"
+        signals_enabled:
+          type: array
+          items:
+            type: string
+          default: ["all"]
+        diarization:
+          type: boolean
+          default: true
+        fingerprinting:
+          type: boolean
+          default: false
+        webhook_url:
+          type: string
+          format: uri
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        created_at:
+          type: string
+          format: date-time
+        settings:
+          $ref: '#/components/schemas/SessionSettings'
+
+    # ────────────────────────────────────────────────────────────
+    # Signal Schemas
+    # ────────────────────────────────────────────────────────────
+    Signal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: Signal type from Signal Atlas
+          example: "truth_gap"
+        timestamp:
+          type: number
+          description: Milliseconds from start
+        duration_ms:
+          type: integer
+        speaker_id:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        intensity:
+          type: number
+          minimum: 0
+          maximum: 1
+        context:
+          type: object
+          properties:
+            transcript_before:
+              type: string
+            transcript_after:
+              type: string
+            metrics:
+              type: object
+
+    SignalList:
+      type: object
+      properties:
+        signals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Signal'
+        total:
+          type: integer
+        summary:
+          type: object
+          properties:
+            by_type:
+              type: object
+            by_speaker:
+              type: object
+
+    # ────────────────────────────────────────────────────────────
+    # Transcript Schemas
+    # ────────────────────────────────────────────────────────────
+    Transcript:
+      type: object
+      properties:
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranscriptSegment'
+        speakers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Speaker'
+
+    TranscriptSegment:
+      type: object
+      properties:
+        id:
+          type: string
+        speaker_id:
+          type: string
+        start_ms:
+          type: integer
+        end_ms:
+          type: integer
+        text:
+          type: string
+        confidence:
+          type: number
+        words:
+          type: array
+          items:
+            $ref: '#/components/schemas/Word'
+        signals:
+          type: array
+          items:
+            type: string
+          description: Signal IDs attached to this segment
+
+    Word:
+      type: object
+      properties:
+        text:
+          type: string
+        start_ms:
+          type: integer
+        end_ms:
+          type: integer
+        confidence:
+          type: number
+
+    Speaker:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        voice_fingerprint_id:
+          type: string
+        talk_time_ms:
+          type: integer
+        metrics:
+          $ref: '#/components/schemas/SpeakerMetrics'
+
+    SpeakerMetrics:
+      type: object
+      properties:
+        avg_pitch:
+          type: number
+        pitch_variance:
+          type: number
+        avg_speech_rate:
+          type: number
+        interrupt_count:
+          type: integer
+        interrupted_count:
+          type: integer
+        talk_ratio:
+          type: number
+
+    # ────────────────────────────────────────────────────────────
+    # Timeline & Insights
+    # ────────────────────────────────────────────────────────────
+    Timeline:
+      type: object
+      properties:
+        duration_ms:
+          type: integer
+        resolution_ms:
+          type: integer
+        data_points:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimelinePoint'
+
+    TimelinePoint:
+      type: object
+      properties:
+        timestamp_ms:
+          type: integer
+        valence:
+          type: number
+          description: -1 (negative) to +1 (positive)
+        arousal:
+          type: number
+          description: 0 (calm) to 1 (excited)
+        tension_score:
+          type: number
+        active_speaker:
+          type: string
+        active_signals:
+          type: array
+          items:
+            type: string
+
+    Insights:
+      type: object
+      properties:
+        summary:
+          type: string
+        key_moments:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyMoment'
+        speaker_analysis:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpeakerAnalysis'
+        recommendations:
+          type: array
+          items:
+            type: string
+        risk_flags:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskFlag'
+
+    KeyMoment:
+      type: object
+      properties:
+        timestamp_ms:
+          type: integer
+        type:
+          type: string
+          enum: [tension_peak, breakthrough, disagreement, consensus, emotional_shift]
+        description:
+          type: string
+        importance:
+          type: number
+
+    SpeakerAnalysis:
+      type: object
+      properties:
+        speaker_id:
+          type: string
+        engagement_score:
+          type: number
+        dominance_score:
+          type: number
+        stress_index:
+          type: number
+        authenticity_score:
+          type: number
+        notable_patterns:
+          type: array
+          items:
+            type: string
+
+    RiskFlag:
+      type: object
+      properties:
+        type:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        evidence:
+          type: array
+          items:
+            type: string
+```
+
+---
+
+# 3. DATABASE SCHEMA
+
+## 3.1 PostgreSQL Core Tables
+
+```sql
+-- ══════════════════════════════════════════════════════════════
+-- EXTENSIONS
+-- ══════════════════════════════════════════════════════════════
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";      -- Text search
+CREATE EXTENSION IF NOT EXISTS "timescaledb";   -- Time-series
+
+-- ══════════════════════════════════════════════════════════════
+-- CORE ENTITIES
+-- ══════════════════════════════════════════════════════════════
+
+-- Organizations (multi-tenant)
+CREATE TABLE organizations (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name            VARCHAR(255) NOT NULL,
+    slug            VARCHAR(100) UNIQUE NOT NULL,
+    plan            VARCHAR(50) NOT NULL DEFAULT 'free',
+    settings        JSONB DEFAULT '{}',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Users
+CREATE TABLE users (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id          UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    email           VARCHAR(255) UNIQUE NOT NULL,
+    name            VARCHAR(255),
+    role            VARCHAR(50) NOT NULL DEFAULT 'member',
+    auth_provider   VARCHAR(50),        -- 'auth0', 'google', 'saml'
+    auth_id         VARCHAR(255),       -- External auth ID
+    settings        JSONB DEFAULT '{}',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_users_org ON users(org_id);
+CREATE INDEX idx_users_email ON users(email);
+
+-- Voice Fingerprints (opt-in feature)
+CREATE TABLE voice_fingerprints (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
+    embedding       BYTEA NOT NULL,     -- Encrypted embedding vector
+    embedding_dim   INTEGER NOT NULL DEFAULT 512,
+    baseline_type   VARCHAR(50) NOT NULL, -- 'neutral', 'stressed', 'engaged'
+    quality_score   FLOAT,
+    sample_count    INTEGER DEFAULT 1,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_fingerprints_user ON voice_fingerprints(user_id);
+
+-- ══════════════════════════════════════════════════════════════
+-- SESSIONS & RECORDINGS
+-- ══════════════════════════════════════════════════════════════
+
+-- Analysis Sessions
+CREATE TABLE sessions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id          UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    created_by      UUID REFERENCES users(id),
+    name            VARCHAR(255) NOT NULL,
+    description     TEXT,
+    status          VARCHAR(50) NOT NULL DEFAULT 'pending',
+    source_type     VARCHAR(50),        -- 'upload', 'realtime', 'bot'
+    duration_ms     INTEGER,
+    language        VARCHAR(10),
+    settings        JSONB DEFAULT '{}',
+    metadata        JSONB DEFAULT '{}',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+    completed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX idx_sessions_org ON sessions(org_id);
+CREATE INDEX idx_sessions_status ON sessions(status);
+CREATE INDEX idx_sessions_created ON sessions(created_at DESC);
+
+-- Audio Recordings (metadata only - files in S3)
+CREATE TABLE recordings (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id      UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    storage_path    VARCHAR(500) NOT NULL,  -- S3 path
+    storage_bucket  VARCHAR(100) NOT NULL,
+    file_format     VARCHAR(20) NOT NULL,
+    sample_rate     INTEGER,
+    channels        INTEGER,
+    duration_ms     INTEGER,
+    file_size_bytes BIGINT,
+    checksum_sha256 VARCHAR(64),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_recordings_session ON recordings(session_id);
+
+-- Speakers (per-session speaker identification)
+CREATE TABLE speakers (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id      UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    fingerprint_id  UUID REFERENCES voice_fingerprints(id),
+    label           VARCHAR(100),       -- 'Speaker A', or matched user name
+    user_id         UUID REFERENCES users(id),  -- If matched to known user
+    talk_time_ms    INTEGER DEFAULT 0,
+    segment_count   INTEGER DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_speakers_session ON speakers(session_id);
+
+-- ══════════════════════════════════════════════════════════════
+-- TRANSCRIPT DATA
+-- ══════════════════════════════════════════════════════════════
+
+-- Transcript Segments
+CREATE TABLE transcript_segments (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id      UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    speaker_id      UUID REFERENCES speakers(id),
+    segment_index   INTEGER NOT NULL,
+    start_ms        INTEGER NOT NULL,
+    end_ms          INTEGER NOT NULL,
+    text            TEXT NOT NULL,
+    confidence      FLOAT,
+    language        VARCHAR(10),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_segments_session ON transcript_segments(session_id);
+CREATE INDEX idx_segments_time ON transcript_segments(session_id, start_ms);
+
+-- Word-level timestamps
+CREATE TABLE transcript_words (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    segment_id      UUID REFERENCES transcript_segments(id) ON DELETE CASCADE,
+    word_index      INTEGER NOT NULL,
+    text            VARCHAR(100) NOT NULL,
+    start_ms        INTEGER NOT NULL,
+    end_ms          INTEGER NOT NULL,
+    confidence      FLOAT
+);
+
+CREATE INDEX idx_words_segment ON transcript_words(segment_id);
+
+-- ══════════════════════════════════════════════════════════════
+-- SIGNAL EVENTS (TimescaleDB Hypertable)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE signal_events (
+    id              UUID DEFAULT uuid_generate_v4(),
+    session_id      UUID NOT NULL,
+    speaker_id      UUID,
+    timestamp       TIMESTAMPTZ NOT NULL,
+    signal_type     VARCHAR(50) NOT NULL,
+    confidence      FLOAT NOT NULL,
+    intensity       FLOAT,
+    duration_ms     INTEGER,
+    start_ms        INTEGER,
+    end_ms          INTEGER,
+    metrics         JSONB,              -- Raw metrics that triggered signal
+    context         JSONB,              -- Surrounding transcript context
+    PRIMARY KEY (id, timestamp)
+);
+
+SELECT create_hypertable('signal_events', 'timestamp');
+
+CREATE INDEX idx_signals_session ON signal_events(session_id, timestamp DESC);
+CREATE INDEX idx_signals_type ON signal_events(signal_type);
+
+-- ══════════════════════════════════════════════════════════════
+-- PROSODIC FEATURES (TimescaleDB Hypertable)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE prosodic_features (
+    id              UUID DEFAULT uuid_generate_v4(),
+    session_id      UUID NOT NULL,
+    speaker_id      UUID,
+    timestamp       TIMESTAMPTZ NOT NULL,
+    -- Pitch features
+    pitch_mean      FLOAT,
+    pitch_std       FLOAT,
+    pitch_range     FLOAT,
+    pitch_slope     FLOAT,
+    jitter          FLOAT,
+    -- Energy features
+    energy_mean     FLOAT,
+    energy_std      FLOAT,
+    shimmer         FLOAT,
+    -- Temporal features
+    speech_rate     FLOAT,
+    pause_duration  FLOAT,
+    -- Voice quality
+    hnr             FLOAT,              -- Harmonic-to-noise ratio
+    spectral_centroid FLOAT,
+    -- Additional features as JSONB
+    extended        JSONB,
+    PRIMARY KEY (id, timestamp)
+);
+
+SELECT create_hypertable('prosodic_features', 'timestamp');
+
+CREATE INDEX idx_prosodics_session ON prosodic_features(session_id, timestamp DESC);
+
+-- ══════════════════════════════════════════════════════════════
+-- INSIGHTS & ANALYSIS
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE session_insights (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id      UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    insight_type    VARCHAR(50) NOT NULL, -- 'summary', 'key_moment', 'risk_flag'
+    content         JSONB NOT NULL,
+    importance      FLOAT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_insights_session ON session_insights(session_id);
+
+-- Aggregated speaker metrics
+CREATE TABLE speaker_metrics (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id      UUID REFERENCES sessions(id) ON DELETE CASCADE,
+    speaker_id      UUID REFERENCES speakers(id) ON DELETE CASCADE,
+    -- Engagement metrics
+    engagement_score    FLOAT,
+    dominance_score     FLOAT,
+    stress_index        FLOAT,
+    authenticity_score  FLOAT,
+    -- Behavioral metrics
+    talk_ratio          FLOAT,
+    interrupt_rate      FLOAT,
+    avg_response_latency_ms INTEGER,
+    -- Prosodic aggregates
+    avg_pitch           FLOAT,
+    pitch_variance      FLOAT,
+    avg_speech_rate     FLOAT,
+    -- Extended metrics
+    extended            JSONB,
+    created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_speaker_metrics_session ON speaker_metrics(session_id);
+
+-- ══════════════════════════════════════════════════════════════
+-- API & INTEGRATIONS
+-- ══════════════════════════════════════════════════════════════
+
+-- API Keys
+CREATE TABLE api_keys (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id          UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    name            VARCHAR(255) NOT NULL,
+    key_hash        VARCHAR(64) NOT NULL,   -- SHA-256 of API key
+    key_prefix      VARCHAR(10) NOT NULL,   -- First 8 chars for identification
+    scopes          TEXT[] DEFAULT '{}',
+    rate_limit      INTEGER DEFAULT 100,    -- Requests per minute
+    last_used_at    TIMESTAMPTZ,
+    expires_at      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_api_keys_org ON api_keys(org_id);
+CREATE UNIQUE INDEX idx_api_keys_prefix ON api_keys(key_prefix);
+
+-- Webhooks
+CREATE TABLE webhooks (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    org_id          UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    url             VARCHAR(500) NOT NULL,
+    events          TEXT[] NOT NULL,        -- ['session.completed', 'signal.detected']
+    secret          VARCHAR(64) NOT NULL,   -- For signature verification
+    is_active       BOOLEAN DEFAULT true,
+    failure_count   INTEGER DEFAULT 0,
+    last_triggered  TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_webhooks_org ON webhooks(org_id);
+
+-- Webhook delivery log
+CREATE TABLE webhook_deliveries (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    webhook_id      UUID REFERENCES webhooks(id) ON DELETE CASCADE,
+    event_type      VARCHAR(100) NOT NULL,
+    payload         JSONB NOT NULL,
+    response_status INTEGER,
+    response_body   TEXT,
+    delivered_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_webhook_deliveries ON webhook_deliveries(webhook_id, delivered_at DESC);
+
+-- ══════════════════════════════════════════════════════════════
+-- CONTINUOUS AGGREGATES (TimescaleDB)
+-- ══════════════════════════════════════════════════════════════
+
+-- Real-time session signal summary (refreshes every minute)
+CREATE MATERIALIZED VIEW session_signal_summary
+WITH (timescaledb.continuous) AS
+SELECT
+    session_id,
+    time_bucket('1 minute', timestamp) AS bucket,
+    signal_type,
+    COUNT(*) as event_count,
+    AVG(confidence) as avg_confidence,
+    AVG(intensity) as avg_intensity,
+    MAX(intensity) as max_intensity
+FROM signal_events
+GROUP BY session_id, bucket, signal_type
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy('session_signal_summary',
+    start_offset => INTERVAL '1 hour',
+    end_offset => INTERVAL '1 minute',
+    schedule_interval => INTERVAL '1 minute'
+);
+
+-- Daily organization usage
+CREATE MATERIALIZED VIEW org_daily_usage
+WITH (timescaledb.continuous) AS
+SELECT
+    s.org_id,
+    time_bucket('1 day', se.timestamp) AS day,
+    COUNT(DISTINCT s.id) as session_count,
+    SUM(s.duration_ms) / 60000.0 as total_minutes,
+    COUNT(*) as signal_count
+FROM signal_events se
+JOIN sessions s ON se.session_id = s.id
+GROUP BY s.org_id, day
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy('org_daily_usage',
+    start_offset => INTERVAL '3 days',
+    end_offset => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 hour'
+);
+```
+
+---
+
+# 4. CORE PIPELINE IMPLEMENTATION
+
+## 4.1 Pipeline Orchestrator
+
+```python
+# packages/pipeline/src/orchestrator.py
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional, Dict, Any, List
+import asyncio
+from uuid import UUID
+import structlog
+
+from .stages import (
+    CleanseStage,
+    DiarizeStage,
+    TranscribeStage,
+    ProsodicsStage,
+    SemanticsStage,
+    SynthesizeStage
+)
+from .models import AudioChunk, PipelineResult, SessionConfig
+
+logger = structlog.get_logger()
+
+
+class PipelineMode(Enum):
+    FILE = "file"           # Batch processing of uploaded files
+    STREAM = "stream"       # Real-time streaming
+    HYBRID = "hybrid"       # File with real-time-like output
+
+
+@dataclass
+class StageResult:
+    stage_name: str
+    success: bool
+    data: Dict[str, Any]
+    duration_ms: float
+    error: Optional[str] = None
+
+
+class PipelineOrchestrator:
+    """
+    Orchestrates the Subtext audio analysis pipeline.
+
+    Pipeline stages:
+    1. Cleanse   - Noise suppression (DeepFilterNet)
+    2. Diarize   - Speaker identification (Pyannote)
+    3. Transcribe - Speech-to-text (WhisperX)
+    4. Prosodics - Acoustic feature extraction (Wav2Vec2)
+    5. Semantics - LLM analysis (Llama-3/Mixtral)
+    6. Synthesize - Final fusion and signal detection
+    """
+
+    def __init__(
+        self,
+        config: SessionConfig,
+        mode: PipelineMode = PipelineMode.FILE
+    ):
+        self.config = config
+        self.mode = mode
+        self.stages: Dict[str, Any] = {}
+        self._init_stages()
+
+    def _init_stages(self):
+        """Initialize pipeline stages with configuration."""
+        self.stages = {
+            "cleanse": CleanseStage(
+                model_name="deepfilternet3",
+                preserve_prosody=True
+            ),
+            "diarize": DiarizeStage(
+                model_name="pyannote/speaker-diarization-3.0",
+                min_speakers=self.config.min_speakers,
+                max_speakers=self.config.max_speakers
+            ),
+            "transcribe": TranscribeStage(
+                model_name="whisperx-large-v3",
+                language=self.config.language,
+                word_timestamps=True
+            ),
+            "prosodics": ProsodicsStage(
+                model_name="wav2vec2-base-ser",
+                feature_set="extended"  # All 47 features
+            ),
+            "semantics": SemanticsStage(
+                model_name=self.config.llm_model or "llama-3-70b",
+                provider=self.config.llm_provider or "local"
+            ),
+            "synthesize": SynthesizeStage(
+                signal_atlas=self.config.signal_atlas,
+                confidence_threshold=self.config.signal_confidence_threshold
+            )
+        }
+
+    async def process_file(
+        self,
+        session_id: UUID,
+        audio_path: str
+    ) -> PipelineResult:
+        """
+        Process a complete audio file through the pipeline.
+
+        Args:
+            session_id: UUID of the analysis session
+            audio_path: Path to the audio file (local or S3)
+
+        Returns:
+            PipelineResult with all analysis data
+        """
+        log = logger.bind(session_id=str(session_id))
+        log.info("Starting file pipeline", audio_path=audio_path)
+
+        results: List[StageResult] = []
+        context = {"session_id": session_id, "audio_path": audio_path}
+
+        try:
+            # Stage 1: Cleanse
+            cleanse_result = await self._run_stage(
+                "cleanse",
+                context,
+                audio_path=audio_path
+            )
+            results.append(cleanse_result)
+            context["clean_audio"] = cleanse_result.data["audio"]
+            context["noise_profile"] = cleanse_result.data["noise_profile"]
+
+            # Stage 2 & 3: Diarize and Transcribe (can run in parallel)
+            diarize_task = self._run_stage(
+                "diarize",
+                context,
+                audio=context["clean_audio"]
+            )
+            transcribe_task = self._run_stage(
+                "transcribe",
+                context,
+                audio=context["clean_audio"]
+            )
+
+            diarize_result, transcribe_result = await asyncio.gather(
+                diarize_task, transcribe_task
+            )
+            results.extend([diarize_result, transcribe_result])
+
+            context["speakers"] = diarize_result.data["speakers"]
+            context["segments"] = diarize_result.data["segments"]
+            context["transcript"] = transcribe_result.data["transcript"]
+            context["words"] = transcribe_result.data["words"]
+
+            # Align transcript with speaker segments
+            context["aligned_segments"] = self._align_transcript_speakers(
+                context["transcript"],
+                context["segments"]
+            )
+
+            # Stage 4: Prosodics (per-segment analysis)
+            prosodics_result = await self._run_stage(
+                "prosodics",
+                context,
+                audio=context["clean_audio"],
+                segments=context["aligned_segments"]
+            )
+            results.append(prosodics_result)
+            context["prosodic_features"] = prosodics_result.data["features"]
+
+            # Stage 5: Semantics (LLM analysis)
+            semantics_result = await self._run_stage(
+                "semantics",
+                context,
+                transcript=context["aligned_segments"],
+                prosodics=context["prosodic_features"]
+            )
+            results.append(semantics_result)
+            context["semantic_analysis"] = semantics_result.data
+
+            # Stage 6: Synthesize (signal detection + final fusion)
+            synthesize_result = await self._run_stage(
+                "synthesize",
+                context,
+                transcript=context["aligned_segments"],
+                prosodics=context["prosodic_features"],
+                semantics=context["semantic_analysis"]
+            )
+            results.append(synthesize_result)
+
+            # Build final result
+            return PipelineResult(
+                session_id=session_id,
+                success=True,
+                speakers=context["speakers"],
+                transcript=context["aligned_segments"],
+                signals=synthesize_result.data["signals"],
+                timeline=synthesize_result.data["timeline"],
+                insights=synthesize_result.data["insights"],
+                speaker_metrics=synthesize_result.data["speaker_metrics"],
+                stage_results=results,
+                processing_time_ms=sum(r.duration_ms for r in results)
+            )
+
+        except Exception as e:
+            log.error("Pipeline failed", error=str(e))
+            return PipelineResult(
+                session_id=session_id,
+                success=False,
+                error=str(e),
+                stage_results=results
+            )
+
+    async def process_stream(
+        self,
+        session_id: UUID,
+        audio_stream: asyncio.Queue[AudioChunk]
+    ) -> asyncio.Queue[Dict[str, Any]]:
+        """
+        Process real-time audio stream.
+
+        Returns a queue that receives incremental results:
+        - transcript updates
+        - signal detections
+        - ESP (Emotional State Protocol) messages
+        """
+        output_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+
+        async def _process():
+            buffer = AudioBuffer(
+                sample_rate=16000,
+                chunk_duration_ms=100,
+                overlap_ms=50
+            )
+
+            while True:
+                chunk = await audio_stream.get()
+                if chunk is None:  # End of stream
+                    break
+
+                buffer.add(chunk)
+
+                if buffer.ready_for_processing():
+                    segment = buffer.get_segment()
+
+                    # Process through lightweight real-time stages
+                    clean = await self.stages["cleanse"].process_chunk(segment)
+                    features = await self.stages["prosodics"].process_chunk(clean)
+
+                    # Incremental transcription
+                    transcript = await self.stages["transcribe"].process_chunk(clean)
+
+                    # Real-time signal detection
+                    signals = await self.stages["synthesize"].detect_realtime(
+                        features, transcript
+                    )
+
+                    # Build ESP message
+                    esp = self._build_esp_message(features, signals)
+
+                    # Send results
+                    await output_queue.put({
+                        "type": "update",
+                        "transcript": transcript,
+                        "signals": signals,
+                        "esp": esp,
+                        "timestamp_ms": chunk.timestamp_ms
+                    })
+
+            # Send final summary
+            final = await self._finalize_stream(buffer)
+            await output_queue.put({"type": "complete", "summary": final})
+            await output_queue.put(None)  # Signal end
+
+        asyncio.create_task(_process())
+        return output_queue
+
+    async def _run_stage(
+        self,
+        stage_name: str,
+        context: Dict[str, Any],
+        **kwargs
+    ) -> StageResult:
+        """Execute a pipeline stage with timing and error handling."""
+        import time
+
+        log = logger.bind(
+            stage=stage_name,
+            session_id=str(context.get("session_id"))
+        )
+
+        start = time.perf_counter()
+
+        try:
+            log.info("Stage starting")
+            stage = self.stages[stage_name]
+            result = await stage.process(**kwargs)
+            duration = (time.perf_counter() - start) * 1000
+
+            log.info("Stage completed", duration_ms=duration)
+
+            return StageResult(
+                stage_name=stage_name,
+                success=True,
+                data=result,
+                duration_ms=duration
+            )
+
+        except Exception as e:
+            duration = (time.perf_counter() - start) * 1000
+            log.error("Stage failed", error=str(e), duration_ms=duration)
+
+            return StageResult(
+                stage_name=stage_name,
+                success=False,
+                data={},
+                duration_ms=duration,
+                error=str(e)
+            )
+
+    def _align_transcript_speakers(
+        self,
+        transcript: List[Dict],
+        speaker_segments: List[Dict]
+    ) -> List[Dict]:
+        """Align transcript words with speaker diarization segments."""
+        aligned = []
+
+        for segment in speaker_segments:
+            segment_words = [
+                w for w in transcript
+                if segment["start_ms"] <= w["start_ms"] < segment["end_ms"]
+            ]
+
+            if segment_words:
+                aligned.append({
+                    "speaker_id": segment["speaker_id"],
+                    "start_ms": segment["start_ms"],
+                    "end_ms": segment["end_ms"],
+                    "text": " ".join(w["text"] for w in segment_words),
+                    "words": segment_words,
+                    "confidence": sum(w["confidence"] for w in segment_words) / len(segment_words)
+                })
+
+        return aligned
+
+    def _build_esp_message(
+        self,
+        features: Dict[str, float],
+        signals: List[Dict]
+    ) -> Dict[str, Any]:
+        """Build Emotional State Protocol message from features and signals."""
+        return {
+            "version": "1.0",
+            "valence": self._calculate_valence(features),
+            "arousal": self._calculate_arousal(features),
+            "dominance": self._calculate_dominance(features),
+            "signals": [
+                {"type": s["type"], "confidence": s["confidence"], "intensity": s["intensity"]}
+                for s in signals
+            ],
+            "engagement_score": features.get("engagement", 0.5),
+            "stress_index": features.get("stress", 0.0)
+        }
+
+    def _calculate_valence(self, features: Dict[str, float]) -> float:
+        """Calculate emotional valence from prosodic features."""
+        # Simplified - real implementation uses trained model
+        pitch_factor = (features.get("pitch_mean", 150) - 100) / 200
+        energy_factor = features.get("energy_mean", 0.5)
+        return max(-1, min(1, (pitch_factor + energy_factor) / 2))
+
+    def _calculate_arousal(self, features: Dict[str, float]) -> float:
+        """Calculate emotional arousal from prosodic features."""
+        speech_rate = features.get("speech_rate", 3.0)
+        pitch_std = features.get("pitch_std", 20)
+        return max(0, min(1, (speech_rate / 5 + pitch_std / 50) / 2))
+
+    def _calculate_dominance(self, features: Dict[str, float]) -> float:
+        """Calculate dominance from prosodic features."""
+        energy = features.get("energy_mean", 0.5)
+        pitch_slope = features.get("pitch_slope", 0)
+        return max(0, min(1, energy + (pitch_slope / 100)))
+```
+
+## 4.2 Signal Detection Engine
+
+```python
+# packages/pipeline/src/stages/synthesize.py
+
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
+from enum import Enum
+import numpy as np
+
+
+class SignalType(Enum):
+    # Temporal signals
+    TRUTH_GAP = "truth_gap"
+    STEAMROLL = "steamroll"
+    DEAD_AIR = "dead_air"
+
+    # Spectral signals
+    MICRO_TREMOR = "micro_tremor"
+    MONOTONE = "monotone"
+    UPTICK = "uptick"
+
+    # Contextual signals
+    ECHO_CHAMBER = "echo_chamber"
+    COFFEE_SHOP = "coffee_shop"
+
+    # Composite signals
+    STRESS_SPIKE = "stress_spike"
+    DISENGAGEMENT = "disengagement"
+    DECEPTION_MARKER = "deception_marker"
+    ENTHUSIASM_SURGE = "enthusiasm_surge"
+
+
+@dataclass
+class SignalDefinition:
+    """Definition of a signal from the Signal Atlas."""
+    type: SignalType
+    name: str
+    description: str
+    thresholds: Dict[str, float]
+    weight: float = 1.0
+    requires: List[str] = None  # Required features
+
+
+class SignalAtlas:
+    """
+    The Signal Atlas - maps bio-acoustic metrics to psychological signals.
+    This is the core IP of Subtext.
+    """
+
+    SIGNALS = {
+        # ══════════════════════════════════════════════════════════════
+        # TEMPORAL SIGNALS
+        # ══════════════════════════════════════════════════════════════
+        SignalType.TRUTH_GAP: SignalDefinition(
+            type=SignalType.TRUTH_GAP,
+            name="Truth Gap",
+            description="Extended latency suggesting cognitive load or fabrication",
+            thresholds={
+                "latency_ms_min": 800,
+                "latency_ms_high": 1500,
+                "confidence_boost_per_100ms": 0.05
+            },
+            weight=1.2
+        ),
+
+        SignalType.STEAMROLL: SignalDefinition(
+            type=SignalType.STEAMROLL,
+            name="Steamroll",
+            description="Aggressive interruption with volume dominance",
+            thresholds={
+                "overlap_ms_min": 2000,
+                "volume_diff_db_min": 10,
+                "interrupt_velocity_min": 0.8
+            },
+            weight=1.1
+        ),
+
+        SignalType.DEAD_AIR: SignalDefinition(
+            type=SignalType.DEAD_AIR,
+            name="Dead Air",
+            description="Uncomfortable silence indicating disengagement",
+            thresholds={
+                "silence_ms_min": 5000,
+                "participant_count_min": 3,
+                "previous_activity_threshold": 0.5
+            },
+            weight=1.0
+        ),
+
+        # ══════════════════════════════════════════════════════════════
+        # SPECTRAL SIGNALS
+        # ══════════════════════════════════════════════════════════════
+        SignalType.MICRO_TREMOR: SignalDefinition(
+            type=SignalType.MICRO_TREMOR,
+            name="Micro-Tremor",
+            description="Vocal cord tension indicating stress or deception",
+            thresholds={
+                "jitter_min": 0.02,
+                "jitter_max": 0.08,
+                "duration_ms_min": 500,
+                "burst_count_min": 2
+            },
+            weight=1.3,
+            requires=["jitter", "shimmer"]
+        ),
+
+        SignalType.MONOTONE: SignalDefinition(
+            type=SignalType.MONOTONE,
+            name="Monotone",
+            description="Flat affect suggesting disengagement or burnout",
+            thresholds={
+                "pitch_variance_max": 0.10,
+                "duration_ms_min": 30000,
+                "energy_variance_max": 0.15
+            },
+            weight=0.9,
+            requires=["pitch_std", "energy_std"]
+        ),
+
+        SignalType.UPTICK: SignalDefinition(
+            type=SignalType.UPTICK,
+            name="Uptick",
+            description="Rising intonation on statements (seeking validation)",
+            thresholds={
+                "pitch_slope_min": 15,  # Hz rise over final 500ms
+                "sentence_type": "declarative",
+                "confidence_threshold": 0.7
+            },
+            weight=0.8,
+            requires=["pitch_slope", "sentence_boundary"]
+        ),
+
+        # ══════════════════════════════════════════════════════════════
+        # COMPOSITE SIGNALS
+        # ══════════════════════════════════════════════════════════════
+        SignalType.STRESS_SPIKE: SignalDefinition(
+            type=SignalType.STRESS_SPIKE,
+            name="Stress Spike",
+            description="Sudden increase in stress indicators",
+            thresholds={
+                "stress_delta_min": 0.3,
+                "window_ms": 5000,
+                "components": ["jitter", "speech_rate", "pitch_std"]
+            },
+            weight=1.4
+        ),
+
+        SignalType.DECEPTION_MARKER: SignalDefinition(
+            type=SignalType.DECEPTION_MARKER,
+            name="Deception Marker",
+            description="Combination of signals suggesting untruthfulness",
+            thresholds={
+                "truth_gap_present": True,
+                "micro_tremor_present": True,
+                "text_hedge_words": ["maybe", "perhaps", "I think", "sort of"],
+                "min_component_confidence": 0.6
+            },
+            weight=1.5
+        ),
+    }
+
+
+class SynthesizeStage:
+    """
+    Final synthesis stage - fuses all analysis into signals and insights.
+    """
+
+    def __init__(
+        self,
+        signal_atlas: Optional[SignalAtlas] = None,
+        confidence_threshold: float = 0.5
+    ):
+        self.atlas = signal_atlas or SignalAtlas()
+        self.confidence_threshold = confidence_threshold
+
+    async def process(
+        self,
+        transcript: List[Dict],
+        prosodics: List[Dict],
+        semantics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Synthesize all analysis data into final output.
+
+        Returns:
+            - signals: Detected signal events
+            - timeline: Tension timeline data
+            - insights: AI-generated insights
+            - speaker_metrics: Per-speaker aggregated metrics
+        """
+        # Detect signals
+        signals = await self._detect_all_signals(transcript, prosodics, semantics)
+
+        # Build tension timeline
+        timeline = self._build_timeline(transcript, prosodics, signals)
+
+        # Generate insights
+        insights = await self._generate_insights(
+            transcript, signals, semantics
+        )
+
+        # Calculate speaker metrics
+        speaker_metrics = self._calculate_speaker_metrics(
+            transcript, prosodics, signals
+        )
+
+        return {
+            "signals": signals,
+            "timeline": timeline,
+            "insights": insights,
+            "speaker_metrics": speaker_metrics
+        }
+
+    async def _detect_all_signals(
+        self,
+        transcript: List[Dict],
+        prosodics: List[Dict],
+        semantics: Dict[str, Any]
+    ) -> List[Dict]:
+        """Detect all signal types across the session."""
+        signals = []
+
+        # Index prosodics by timestamp for quick lookup
+        prosodic_index = {p["timestamp_ms"]: p for p in prosodics}
+
+        for i, segment in enumerate(transcript):
+            segment_prosodics = self._get_segment_prosodics(
+                segment, prosodic_index
+            )
+
+            # Check each signal type
+            for signal_type, definition in self.atlas.SIGNALS.items():
+                detected = self._check_signal(
+                    signal_type=signal_type,
+                    definition=definition,
+                    segment=segment,
+                    prosodics=segment_prosodics,
+                    prev_segment=transcript[i-1] if i > 0 else None,
+                    next_segment=transcript[i+1] if i < len(transcript)-1 else None,
+                    semantics=semantics
+                )
+
+                if detected and detected["confidence"] >= self.confidence_threshold:
+                    signals.append(detected)
+
+        # Sort by timestamp
+        signals.sort(key=lambda s: s["timestamp_ms"])
+
+        return signals
+
+    def _check_signal(
+        self,
+        signal_type: SignalType,
+        definition: SignalDefinition,
+        segment: Dict,
+        prosodics: Dict,
+        prev_segment: Optional[Dict],
+        next_segment: Optional[Dict],
+        semantics: Dict
+    ) -> Optional[Dict]:
+        """Check if a specific signal is present in the segment."""
+
+        if signal_type == SignalType.TRUTH_GAP:
+            return self._detect_truth_gap(definition, segment, prev_segment)
+
+        elif signal_type == SignalType.STEAMROLL:
+            return self._detect_steamroll(definition, segment, prev_segment)
+
+        elif signal_type == SignalType.MICRO_TREMOR:
+            return self._detect_micro_tremor(definition, segment, prosodics)
+
+        elif signal_type == SignalType.MONOTONE:
+            return self._detect_monotone(definition, segment, prosodics)
+
+        elif signal_type == SignalType.UPTICK:
+            return self._detect_uptick(definition, segment, prosodics, semantics)
+
+        elif signal_type == SignalType.STRESS_SPIKE:
+            return self._detect_stress_spike(definition, segment, prosodics)
+
+        # Add more signal detectors...
+
+        return None
+
+    def _detect_truth_gap(
+        self,
+        definition: SignalDefinition,
+        segment: Dict,
+        prev_segment: Optional[Dict]
+    ) -> Optional[Dict]:
+        """Detect Truth Gap signal (response latency)."""
+        if not prev_segment:
+            return None
+
+        # Calculate latency between segments
+        latency = segment["start_ms"] - prev_segment["end_ms"]
+
+        # Check if this is a question-answer pattern
+        prev_is_question = prev_segment.get("is_question", False)
+        different_speakers = segment["speaker_id"] != prev_segment["speaker_id"]
+
+        if not (prev_is_question and different_speakers):
+            return None
+
+        thresholds = definition.thresholds
+
+        if latency < thresholds["latency_ms_min"]:
+            return None
+
+        # Calculate confidence based on latency
+        base_confidence = 0.5
+        extra_ms = latency - thresholds["latency_ms_min"]
+        confidence_boost = (extra_ms / 100) * thresholds["confidence_boost_per_100ms"]
+        confidence = min(1.0, base_confidence + confidence_boost)
+
+        # Calculate intensity (normalized latency)
+        intensity = min(1.0, latency / thresholds["latency_ms_high"])
+
+        return {
+            "type": SignalType.TRUTH_GAP.value,
+            "timestamp_ms": prev_segment["end_ms"],
+            "duration_ms": int(latency),
+            "speaker_id": segment["speaker_id"],
+            "confidence": confidence,
+            "intensity": intensity,
+            "metrics": {
+                "latency_ms": latency,
+                "question_text": prev_segment["text"][:100],
+                "answer_start": segment["text"][:50]
+            }
+        }
+
+    def _detect_micro_tremor(
+        self,
+        definition: SignalDefinition,
+        segment: Dict,
+        prosodics: Dict
+    ) -> Optional[Dict]:
+        """Detect Micro-Tremor signal (vocal stress)."""
+        if not prosodics:
+            return None
+
+        jitter = prosodics.get("jitter", 0)
+        shimmer = prosodics.get("shimmer", 0)
+
+        thresholds = definition.thresholds
+
+        # Check jitter is in the "stress" range
+        if not (thresholds["jitter_min"] <= jitter <= thresholds["jitter_max"]):
+            return None
+
+        # Check for sustained duration
+        duration = segment["end_ms"] - segment["start_ms"]
+        if duration < thresholds["duration_ms_min"]:
+            return None
+
+        # Calculate confidence from jitter intensity
+        jitter_range = thresholds["jitter_max"] - thresholds["jitter_min"]
+        jitter_normalized = (jitter - thresholds["jitter_min"]) / jitter_range
+
+        # Boost confidence if shimmer also elevated
+        shimmer_boost = 0.1 if shimmer > 0.03 else 0
+
+        confidence = min(1.0, 0.5 + jitter_normalized * 0.3 + shimmer_boost)
+        intensity = jitter_normalized
+
+        return {
+            "type": SignalType.MICRO_TREMOR.value,
+            "timestamp_ms": segment["start_ms"],
+            "duration_ms": duration,
+            "speaker_id": segment["speaker_id"],
+            "confidence": confidence,
+            "intensity": intensity,
+            "metrics": {
+                "jitter": jitter,
+                "shimmer": shimmer,
+                "segment_text": segment["text"][:100]
+            }
+        }
+
+    def _build_timeline(
+        self,
+        transcript: List[Dict],
+        prosodics: List[Dict],
+        signals: List[Dict],
+        resolution_ms: int = 5000
+    ) -> Dict[str, Any]:
+        """Build tension timeline for visualization."""
+        if not transcript:
+            return {"duration_ms": 0, "resolution_ms": resolution_ms, "data_points": []}
+
+        duration = transcript[-1]["end_ms"]
+        data_points = []
+
+        # Create time buckets
+        for bucket_start in range(0, duration, resolution_ms):
+            bucket_end = bucket_start + resolution_ms
+
+            # Get prosodics in this bucket
+            bucket_prosodics = [
+                p for p in prosodics
+                if bucket_start <= p["timestamp_ms"] < bucket_end
+            ]
+
+            # Get signals in this bucket
+            bucket_signals = [
+                s for s in signals
+                if bucket_start <= s["timestamp_ms"] < bucket_end
+            ]
+
+            # Calculate metrics for this bucket
+            valence = self._avg_or_default(bucket_prosodics, "valence", 0)
+            arousal = self._avg_or_default(bucket_prosodics, "arousal", 0.5)
+
+            # Tension = combination of arousal and negative signals
+            negative_signal_count = len([
+                s for s in bucket_signals
+                if s["type"] in ["truth_gap", "steamroll", "micro_tremor", "stress_spike"]
+            ])
+            tension = min(1.0, arousal * 0.5 + negative_signal_count * 0.2)
+
+            # Active speaker
+            active_segments = [
+                t for t in transcript
+                if t["start_ms"] < bucket_end and t["end_ms"] > bucket_start
+            ]
+            active_speaker = active_segments[-1]["speaker_id"] if active_segments else None
+
+            data_points.append({
+                "timestamp_ms": bucket_start,
+                "valence": valence,
+                "arousal": arousal,
+                "tension_score": tension,
+                "active_speaker": active_speaker,
+                "active_signals": [s["type"] for s in bucket_signals]
+            })
+
+        return {
+            "duration_ms": duration,
+            "resolution_ms": resolution_ms,
+            "data_points": data_points
+        }
+
+    def _calculate_speaker_metrics(
+        self,
+        transcript: List[Dict],
+        prosodics: List[Dict],
+        signals: List[Dict]
+    ) -> List[Dict]:
+        """Calculate aggregated metrics per speaker."""
+        speakers = {}
+
+        for segment in transcript:
+            sid = segment["speaker_id"]
+            if sid not in speakers:
+                speakers[sid] = {
+                    "speaker_id": sid,
+                    "segments": [],
+                    "signals": [],
+                    "prosodics": []
+                }
+            speakers[sid]["segments"].append(segment)
+
+        # Assign signals and prosodics to speakers
+        for signal in signals:
+            sid = signal.get("speaker_id")
+            if sid and sid in speakers:
+                speakers[sid]["signals"].append(signal)
+
+        # Calculate metrics
+        total_talk_time = sum(
+            s["end_ms"] - s["start_ms"]
+            for segs in speakers.values()
+            for s in segs["segments"]
+        )
+
+        results = []
+        for sid, data in speakers.items():
+            talk_time = sum(s["end_ms"] - s["start_ms"] for s in data["segments"])
+
+            # Count signal types
+            signal_counts = {}
+            for s in data["signals"]:
+                signal_counts[s["type"]] = signal_counts.get(s["type"], 0) + 1
+
+            results.append({
+                "speaker_id": sid,
+                "talk_time_ms": talk_time,
+                "talk_ratio": talk_time / total_talk_time if total_talk_time > 0 else 0,
+                "segment_count": len(data["segments"]),
+                "signal_count": len(data["signals"]),
+                "signal_breakdown": signal_counts,
+                "avg_segment_duration_ms": talk_time / len(data["segments"]) if data["segments"] else 0,
+                # Placeholder scores - real implementation uses ML models
+                "engagement_score": 0.7,
+                "stress_index": len([s for s in data["signals"] if "stress" in s["type"] or "tremor" in s["type"]]) * 0.1,
+                "dominance_score": signal_counts.get("steamroll", 0) * 0.15 + (talk_time / total_talk_time if total_talk_time else 0)
+            })
+
+        return results
+
+    @staticmethod
+    def _avg_or_default(items: List[Dict], key: str, default: float) -> float:
+        values = [i.get(key) for i in items if i.get(key) is not None]
+        return sum(values) / len(values) if values else default
+
+    @staticmethod
+    def _get_segment_prosodics(segment: Dict, prosodic_index: Dict) -> Dict:
+        """Get prosodic features for a transcript segment."""
+        # Find prosodics within segment timerange
+        matching = [
+            p for ts, p in prosodic_index.items()
+            if segment["start_ms"] <= ts < segment["end_ms"]
+        ]
+
+        if not matching:
+            return {}
+
+        # Average the features
+        result = {}
+        for key in matching[0].keys():
+            if key != "timestamp_ms" and isinstance(matching[0][key], (int, float)):
+                result[key] = sum(m[key] for m in matching) / len(matching)
+
+        return result
+
+    async def _generate_insights(
+        self,
+        transcript: List[Dict],
+        signals: List[Dict],
+        semantics: Dict
+    ) -> Dict[str, Any]:
+        """Generate AI-powered insights from analysis."""
+        # This would call the LLM for sophisticated insights
+        # Simplified version here
+
+        key_moments = []
+
+        # Find tension peaks
+        high_tension_signals = [
+            s for s in signals
+            if s["intensity"] > 0.7
+        ]
+
+        for signal in high_tension_signals[:5]:  # Top 5 moments
+            key_moments.append({
+                "timestamp_ms": signal["timestamp_ms"],
+                "type": "tension_peak",
+                "description": f"High-intensity {signal['type']} detected",
+                "importance": signal["intensity"]
+            })
+
+        return {
+            "summary": semantics.get("summary", "Analysis complete."),
+            "key_moments": key_moments,
+            "recommendations": semantics.get("recommendations", []),
+            "risk_flags": [
+                {
+                    "type": "deception_risk",
+                    "severity": "medium",
+                    "description": "Multiple truth gap signals detected",
+                    "evidence": [s["type"] for s in signals if s["type"] == "truth_gap"]
+                }
+            ] if len([s for s in signals if s["type"] == "truth_gap"]) > 2 else []
+        }
+```
+
+---
+
+# 5. FRONTEND COMPONENTS
+
+## 5.1 Tension Timeline Component
+
+```tsx
+// packages/web/src/components/TensionTimeline/TensionTimeline.tsx
+
+import React, { useMemo, useRef, useEffect } from 'react';
+import * as d3 from 'd3';
+import { Signal, TimelinePoint, Speaker } from '@/types';
+import { cn } from '@/lib/utils';
+
+interface TensionTimelineProps {
+  data: TimelinePoint[];
+  signals: Signal[];
+  speakers: Speaker[];
+  duration: number;
+  currentTime?: number;
+  onSeek?: (timeMs: number) => void;
+  className?: string;
+}
+
+const SIGNAL_COLORS: Record<string, string> = {
+  truth_gap: '#FCD34D',      // Yellow
+  steamroll: '#EF4444',       // Red
+  dead_air: '#6B7280',        // Gray
+  micro_tremor: '#F97316',    // Orange
+  monotone: '#9CA3AF',        // Light gray
+  uptick: '#A78BFA',          // Purple
+  stress_spike: '#DC2626',    // Dark red
+  enthusiasm_surge: '#10B981', // Green
+};
+
+const TENSION_GRADIENT = [
+  { offset: 0, color: '#10B981' },    // Green (calm)
+  { offset: 0.3, color: '#FBBF24' },  // Yellow
+  { offset: 0.6, color: '#F97316' },  // Orange
+  { offset: 1, color: '#EF4444' },    // Red (tense)
+];
+
+export const TensionTimeline: React.FC<TensionTimelineProps> = ({
+  data,
+  signals,
+  speakers,
+  duration,
+  currentTime = 0,
+  onSeek,
+  className,
+}) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Dimensions
+  const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+  const width = 800;
+  const height = 200;
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  // Scales
+  const xScale = useMemo(
+    () => d3.scaleLinear().domain([0, duration]).range([0, innerWidth]),
+    [duration, innerWidth]
+  );
+
+  const yScale = useMemo(
+    () => d3.scaleLinear().domain([0, 1]).range([innerHeight, 0]),
+    [innerHeight]
+  );
+
+  // Color scale for tension
+  const tensionColorScale = useMemo(
+    () =>
+      d3
+        .scaleLinear<string>()
+        .domain([0, 0.3, 0.6, 1])
+        .range(['#10B981', '#FBBF24', '#F97316', '#EF4444']),
+    []
+  );
+
+  // Line generator for tension
+  const tensionLine = useMemo(
+    () =>
+      d3
+        .line<TimelinePoint>()
+        .x((d) => xScale(d.timestamp_ms))
+        .y((d) => yScale(d.tension_score))
+        .curve(d3.curveMonotoneX),
+    [xScale, yScale]
+  );
+
+  // Area generator for filled tension
+  const tensionArea = useMemo(
+    () =>
+      d3
+        .area<TimelinePoint>()
+        .x((d) => xScale(d.timestamp_ms))
+        .y0(innerHeight)
+        .y1((d) => yScale(d.tension_score))
+        .curve(d3.curveMonotoneX),
+    [xScale, yScale, innerHeight]
+  );
+
+  // Render the visualization
+  useEffect(() => {
+    if (!svgRef.current || !data.length) return;
+
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('*').remove();
+
+    const g = svg
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Gradient definition
+    const gradient = svg
+      .append('defs')
+      .append('linearGradient')
+      .attr('id', 'tension-gradient')
+      .attr('x1', '0%')
+      .attr('y1', '100%')
+      .attr('x2', '0%')
+      .attr('y2', '0%');
+
+    TENSION_GRADIENT.forEach(({ offset, color }) => {
+      gradient
+        .append('stop')
+        .attr('offset', `${offset * 100}%`)
+        .attr('stop-color', color)
+        .attr('stop-opacity', 0.3);
+    });
+
+    // Tension area fill
+    g.append('path')
+      .datum(data)
+      .attr('fill', 'url(#tension-gradient)')
+      .attr('d', tensionArea);
+
+    // Tension line
+    g.append('path')
+      .datum(data)
+      .attr('fill', 'none')
+      .attr('stroke', '#6366F1')
+      .attr('stroke-width', 2)
+      .attr('d', tensionLine);
+
+    // Signal markers
+    const signalMarkers = g
+      .selectAll('.signal-marker')
+      .data(signals)
+      .enter()
+      .append('g')
+      .attr('class', 'signal-marker')
+      .attr('transform', (d) => `translate(${xScale(d.timestamp_ms)}, 0)`);
+
+    signalMarkers
+      .append('line')
+      .attr('y1', 0)
+      .attr('y2', innerHeight)
+      .attr('stroke', (d) => SIGNAL_COLORS[d.type] || '#888')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '4,2')
+      .attr('opacity', 0.7);
+
+    signalMarkers
+      .append('circle')
+      .attr('cy', (d) => {
+        const point = data.find(
+          (p) => Math.abs(p.timestamp_ms - d.timestamp_ms) < 5000
+        );
+        return point ? yScale(point.tension_score) : 0;
+      })
+      .attr('r', 6)
+      .attr('fill', (d) => SIGNAL_COLORS[d.type] || '#888')
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 2);
+
+    // Tooltip on hover
+    signalMarkers
+      .append('title')
+      .text((d) => `${d.type} (${(d.confidence * 100).toFixed(0)}%)`);
+
+    // X-axis
+    const xAxis = d3
+      .axisBottom(xScale)
+      .tickFormat((d) => formatTime(d as number))
+      .ticks(10);
+
+    g.append('g')
+      .attr('transform', `translate(0,${innerHeight})`)
+      .call(xAxis)
+      .attr('class', 'text-gray-500');
+
+    // Y-axis
+    const yAxis = d3
+      .axisLeft(yScale)
+      .tickFormat((d) => `${(d as number) * 100}%`)
+      .ticks(5);
+
+    g.append('g').call(yAxis).attr('class', 'text-gray-500');
+
+    // Current time indicator
+    if (currentTime > 0) {
+      g.append('line')
+        .attr('x1', xScale(currentTime))
+        .attr('x2', xScale(currentTime))
+        .attr('y1', 0)
+        .attr('y2', innerHeight)
+        .attr('stroke', '#6366F1')
+        .attr('stroke-width', 2);
+    }
+
+    // Click handler for seeking
+    if (onSeek) {
+      svg.on('click', (event) => {
+        const [x] = d3.pointer(event);
+        const time = xScale.invert(x - margin.left);
+        if (time >= 0 && time <= duration) {
+          onSeek(time);
+        }
+      });
+    }
+  }, [
+    data,
+    signals,
+    duration,
+    currentTime,
+    xScale,
+    yScale,
+    tensionLine,
+    tensionArea,
+    innerHeight,
+    onSeek,
+    margin,
+  ]);
+
+  return (
+    <div ref={containerRef} className={cn('relative', className)}>
+      <svg
+        ref={svgRef}
+        width={width}
+        height={height}
+        className="w-full h-auto"
+        viewBox={`0 0 ${width} ${height}`}
+      />
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 mt-4 text-sm">
+        {Object.entries(SIGNAL_COLORS).map(([type, color]) => (
+          <div key={type} className="flex items-center gap-2">
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: color }}
+            />
+            <span className="text-gray-600 capitalize">
+              {type.replace(/_/g, ' ')}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+function formatTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+export default TensionTimeline;
+```
+
+---
+
+# 6. DEPLOYMENT CONFIGURATION
+
+## 6.1 Docker Compose (Development)
+
+```yaml
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  # ══════════════════════════════════════════════════════════════
+  # APPLICATION SERVICES
+  # ══════════════════════════════════════════════════════════════
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://subtext:subtext@postgres:5432/subtext
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=subtext-audio
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - MODEL_CACHE_DIR=/models
+    volumes:
+      - ./packages/api:/app/packages/api
+      - ./packages/core:/app/packages/core
+      - model-cache:/models
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+  pipeline-worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/worker.Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://subtext:subtext@postgres:5432/subtext
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - MODEL_CACHE_DIR=/models
+    volumes:
+      - ./packages/pipeline:/app/packages/pipeline
+      - ./packages/core:/app/packages/core
+      - model-cache:/models
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  realtime:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/realtime.Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./packages/realtime:/app/packages/realtime
+    depends_on:
+      - redis
+
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web.Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_REALTIME_URL=ws://localhost:8001
+    volumes:
+      - ./packages/web:/app/packages/web
+    command: npm run dev
+
+  # ══════════════════════════════════════════════════════════════
+  # DATA STORES
+  # ══════════════════════════════════════════════════════════════
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=subtext
+      - POSTGRES_PASSWORD=subtext
+      - POSTGRES_DB=subtext
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+
+  # ══════════════════════════════════════════════════════════════
+  # MONITORING
+  # ══════════════════════════════════════════════════════════════
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  model-cache:
+  grafana-data:
+```
+
+## 6.2 Kubernetes Production (Helm values)
+
+```yaml
+# infrastructure/kubernetes/helm/values-production.yaml
+
+global:
+  environment: production
+  domain: subtext.live
+
+api:
+  replicas: 3
+  image:
+    repository: ghcr.io/subtext/api
+    tag: latest
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilization: 70
+
+pipeline:
+  replicas: 5
+  image:
+    repository: ghcr.io/subtext/pipeline
+    tag: latest
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 8Gi
+      nvidia.com/gpu: 1
+    limits:
+      cpu: 4000m
+      memory: 16Gi
+      nvidia.com/gpu: 1
+  autoscaling:
+    enabled: true
+    minReplicas: 5
+    maxReplicas: 50
+    metrics:
+      - type: External
+        external:
+          metric:
+            name: queue_depth
+          target:
+            type: AverageValue
+            averageValue: 10
+
+realtime:
+  replicas: 5
+  image:
+    repository: ghcr.io/subtext/realtime
+    tag: latest
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+web:
+  replicas: 3
+  image:
+    repository: ghcr.io/subtext/web
+    tag: latest
+
+postgresql:
+  enabled: false  # Use RDS
+  external:
+    host: subtext-prod.cluster-xxxx.us-east-1.rds.amazonaws.com
+    port: 5432
+    database: subtext
+    existingSecret: postgres-credentials
+
+redis:
+  enabled: false  # Use ElastiCache
+  external:
+    host: subtext-prod.xxxx.cache.amazonaws.com
+    port: 6379
+
+s3:
+  bucket: subtext-prod-audio
+  region: us-east-1
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: 500m
+  hosts:
+    - host: api.subtext.live
+      paths:
+        - path: /
+          service: api
+    - host: realtime.subtext.live
+      paths:
+        - path: /
+          service: realtime
+    - host: subtext.live
+      paths:
+        - path: /
+          service: web
+  tls:
+    - secretName: subtext-tls
+      hosts:
+        - "*.subtext.live"
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+    dashboards:
+      - subtext-overview
+      - pipeline-performance
+      - api-latency
+
+secrets:
+  enabled: true
+  provider: aws-secrets-manager
+  secretNames:
+    - subtext/prod/database
+    - subtext/prod/api-keys
+    - subtext/prod/ml-models
+```
+
+---
+
+**Document Version:** 1.0
+**Last Updated:** 2025-11-30
+**Classification:** Technical Specification
