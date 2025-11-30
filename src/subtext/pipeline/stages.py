@@ -175,15 +175,152 @@ class CleanseStage(PipelineStage):
 
 
 # ══════════════════════════════════════════════════════════════
+# VAD Stage (Voice Activity Detection)
+# ══════════════════════════════════════════════════════════════
+
+
+class VADStage(PipelineStage):
+    """
+    Voice Activity Detection using Silero VAD.
+
+    Silero VAD achieves 87.7% TPR vs WebRTC's 50%, making it the
+    best open-source VAD available. Used to detect speech regions
+    and filter out silence/noise before downstream processing.
+    """
+
+    name = "vad"
+
+    def __init__(
+        self,
+        threshold: float = 0.5,
+        min_speech_duration_ms: int = 250,
+        min_silence_duration_ms: int = 100,
+        window_size_samples: int = 512,
+        speech_pad_ms: int = 30,
+    ):
+        self.threshold = threshold
+        self.min_speech_duration_ms = min_speech_duration_ms
+        self.min_silence_duration_ms = min_silence_duration_ms
+        self.window_size_samples = window_size_samples
+        self.speech_pad_ms = speech_pad_ms
+        self._model = None
+        self._utils = None
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Load Silero VAD model from torch.hub."""
+        if self._initialized:
+            return
+
+        try:
+            # Load Silero VAD from torch hub
+            model, utils = torch.hub.load(
+                repo_or_dir="snakers4/silero-vad",
+                model="silero_vad",
+                force_reload=False,
+                trust_repo=True,
+            )
+
+            self._model = model
+            self._get_speech_timestamps = utils[0]
+            self._save_audio = utils[1]
+            self._read_audio = utils[2]
+            self._VADIterator = utils[3]
+            self._collect_chunks = utils[4]
+
+            self._initialized = True
+            logger.info("Silero VAD initialized", threshold=self.threshold)
+
+        except Exception as e:
+            logger.warning("Silero VAD not available", error=str(e))
+            self._initialized = True
+
+    async def process(
+        self,
+        audio: np.ndarray,
+        sample_rate: int = 16000,
+    ) -> dict[str, Any]:
+        """
+        Detect voice activity in audio.
+
+        Returns:
+            dict with 'speech_segments' (list of time ranges),
+            'speech_ratio', and 'cleaned_audio' (optional)
+        """
+        await self.initialize()
+
+        if self._model is None:
+            # Return full audio as speech if no model
+            duration_ms = int(len(audio) / sample_rate * 1000)
+            return {
+                "speech_segments": [{"start_ms": 0, "end_ms": duration_ms}],
+                "speech_ratio": 1.0,
+                "total_speech_ms": duration_ms,
+            }
+
+        try:
+            # Convert to tensor
+            audio_tensor = torch.from_numpy(audio).float()
+
+            # Get speech timestamps
+            speech_timestamps = self._get_speech_timestamps(
+                audio_tensor,
+                self._model,
+                threshold=self.threshold,
+                sampling_rate=sample_rate,
+                min_speech_duration_ms=self.min_speech_duration_ms,
+                min_silence_duration_ms=self.min_silence_duration_ms,
+                window_size_samples=self.window_size_samples,
+                speech_pad_ms=self.speech_pad_ms,
+            )
+
+            # Convert to milliseconds
+            speech_segments = [
+                {
+                    "start_ms": int(ts["start"] / sample_rate * 1000),
+                    "end_ms": int(ts["end"] / sample_rate * 1000),
+                }
+                for ts in speech_timestamps
+            ]
+
+            # Calculate speech ratio
+            total_speech_samples = sum(
+                ts["end"] - ts["start"] for ts in speech_timestamps
+            )
+            speech_ratio = total_speech_samples / len(audio) if len(audio) > 0 else 0
+            total_speech_ms = int(total_speech_samples / sample_rate * 1000)
+
+            logger.info(
+                "VAD complete",
+                segment_count=len(speech_segments),
+                speech_ratio=f"{speech_ratio:.2%}",
+            )
+
+            return {
+                "speech_segments": speech_segments,
+                "speech_ratio": float(speech_ratio),
+                "total_speech_ms": total_speech_ms,
+            }
+
+        except Exception as e:
+            logger.error("VAD failed", error=str(e))
+            raise
+
+
+# ══════════════════════════════════════════════════════════════
 # Diarize Stage (Speaker Identification)
 # ══════════════════════════════════════════════════════════════
 
 
 class DiarizeStage(PipelineStage):
     """
-    Speaker diarization using Pyannote.
+    Speaker diarization using Pyannote with ECAPA-TDNN embeddings.
 
     Identifies "who is speaking when" with precise time boundaries.
+    Optionally extracts speaker embeddings for voice fingerprinting.
+
+    ECAPA-TDNN achieves 1.71% EER on VoxCeleb1-O, making it the
+    most accurate open-source speaker verification model.
     """
 
     name = "diarize"
@@ -191,22 +328,28 @@ class DiarizeStage(PipelineStage):
     def __init__(
         self,
         model_name: str = "pyannote/speaker-diarization-3.1",
+        embedding_model: str = "speechbrain/spkrec-ecapa-voxceleb",
         min_speakers: int | None = None,
         max_speakers: int | None = None,
         use_auth_token: str | None = None,
+        extract_embeddings: bool = True,
     ):
         self.model_name = model_name
+        self.embedding_model = embedding_model
         self.min_speakers = min_speakers
         self.max_speakers = max_speakers
         self.use_auth_token = use_auth_token
+        self.extract_embeddings = extract_embeddings
         self._pipeline = None
+        self._embedding_pipeline = None
         self._initialized = False
 
     async def initialize(self) -> None:
-        """Load Pyannote diarization pipeline."""
+        """Load Pyannote diarization and ECAPA-TDNN embedding pipelines."""
         if self._initialized:
             return
 
+        # Load Pyannote diarization
         try:
             from pyannote.audio import Pipeline
 
@@ -219,12 +362,31 @@ class DiarizeStage(PipelineStage):
             if torch.cuda.is_available():
                 self._pipeline.to(torch.device("cuda"))
 
-            self._initialized = True
             logger.info("Pyannote diarization initialized", model=self.model_name)
 
         except Exception as e:
             logger.warning("Pyannote not available", error=str(e))
-            self._initialized = True
+
+        # Load ECAPA-TDNN for speaker embeddings
+        if self.extract_embeddings:
+            try:
+                from speechbrain.inference.speaker import EncoderClassifier
+
+                self._embedding_pipeline = EncoderClassifier.from_hparams(
+                    source=self.embedding_model,
+                    savedir=f"{settings.model_cache_dir}/ecapa-tdnn",
+                    run_opts={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+                )
+
+                logger.info(
+                    "ECAPA-TDNN embeddings initialized",
+                    model=self.embedding_model,
+                )
+
+            except Exception as e:
+                logger.warning("ECAPA-TDNN not available", error=str(e))
+
+        self._initialized = True
 
     async def process(
         self,
@@ -232,10 +394,13 @@ class DiarizeStage(PipelineStage):
         sample_rate: int = 16000,
     ) -> dict[str, Any]:
         """
-        Perform speaker diarization.
+        Perform speaker diarization with optional embedding extraction.
 
         Returns:
-            dict with 'speakers' (list) and 'segments' (list of time ranges)
+            dict with:
+            - 'speakers': list of speaker info with optional embeddings
+            - 'segments': list of time ranges with speaker assignments
+            - 'embeddings': dict of speaker_id -> embedding vector (if enabled)
         """
         await self.initialize()
 
@@ -251,6 +416,7 @@ class DiarizeStage(PipelineStage):
                         "end_ms": duration_ms,
                     }
                 ],
+                "embeddings": {},
             }
 
         try:
@@ -277,6 +443,7 @@ class DiarizeStage(PipelineStage):
             # Extract speakers and segments
             speakers = {}
             segments = []
+            speaker_audio: dict[str, list[np.ndarray]] = {}
 
             for turn, _, speaker in diarization.itertracks(yield_label=True):
                 if speaker not in speakers:
@@ -285,24 +452,58 @@ class DiarizeStage(PipelineStage):
                         "id": f"speaker_{idx}",
                         "label": f"Speaker {chr(65 + idx)}",  # A, B, C, ...
                     }
+                    speaker_audio[speakers[speaker]["id"]] = []
+
+                speaker_id = speakers[speaker]["id"]
+                start_sample = int(turn.start * sample_rate)
+                end_sample = int(turn.end * sample_rate)
+
+                # Collect audio for embedding
+                if self.extract_embeddings and end_sample > start_sample:
+                    speaker_audio[speaker_id].append(audio[start_sample:end_sample])
 
                 segments.append(
                     {
-                        "speaker_id": speakers[speaker]["id"],
+                        "speaker_id": speaker_id,
                         "start_ms": int(turn.start * 1000),
                         "end_ms": int(turn.end * 1000),
                     }
                 )
 
+            # Extract ECAPA-TDNN embeddings for each speaker
+            embeddings: dict[str, list[float]] = {}
+            if self.extract_embeddings and self._embedding_pipeline:
+                for speaker_id, audio_chunks in speaker_audio.items():
+                    if audio_chunks:
+                        # Concatenate all audio for this speaker (up to 30 seconds)
+                        combined = np.concatenate(audio_chunks)
+                        max_samples = sample_rate * 30  # Max 30 seconds
+                        if len(combined) > max_samples:
+                            combined = combined[:max_samples]
+
+                        # Extract embedding
+                        try:
+                            audio_tensor = torch.from_numpy(combined).float().unsqueeze(0)
+                            embedding = self._embedding_pipeline.encode_batch(audio_tensor)
+                            embeddings[speaker_id] = embedding.squeeze().cpu().tolist()
+                        except Exception as e:
+                            logger.warning(
+                                "Embedding extraction failed for speaker",
+                                speaker_id=speaker_id,
+                                error=str(e),
+                            )
+
             logger.info(
                 "Diarization complete",
                 speaker_count=len(speakers),
                 segment_count=len(segments),
+                embeddings_extracted=len(embeddings),
             )
 
             return {
                 "speakers": list(speakers.values()),
                 "segments": segments,
+                "embeddings": embeddings,
             }
 
         except Exception as e:
@@ -317,7 +518,12 @@ class DiarizeStage(PipelineStage):
 
 class TranscribeStage(PipelineStage):
     """
-    Speech transcription using WhisperX.
+    Speech transcription with multiple ASR backend support.
+
+    Supported backends:
+    - whisperx: OpenAI Whisper with word-level timestamps (default, multilingual)
+    - canary: NVIDIA Canary (5.63% WER - highest accuracy for English)
+    - parakeet: NVIDIA Parakeet TDT (2000+ RTFx - fastest throughput)
 
     Provides word-level timestamps for precise alignment.
     """
@@ -326,12 +532,13 @@ class TranscribeStage(PipelineStage):
 
     def __init__(
         self,
-        model_name: str = "large-v3",
+        backend: str = "whisperx",  # 'whisperx', 'canary', 'parakeet'
+        model_name: str | None = None,  # Override default model for backend
         language: str | None = None,
         word_timestamps: bool = True,
         compute_type: str = "float16",
     ):
-        self.model_name = model_name
+        self.backend = backend
         self.language = language
         self.word_timestamps = word_timestamps
         self.compute_type = compute_type
@@ -339,32 +546,93 @@ class TranscribeStage(PipelineStage):
         self._align_model = None
         self._initialized = False
 
+        # Set default model name based on backend
+        if model_name:
+            self.model_name = model_name
+        elif backend == "whisperx":
+            self.model_name = settings.whisper_model  # large-v3
+        elif backend == "canary":
+            self.model_name = settings.asr_model_accuracy  # nvidia/canary-1b
+        elif backend == "parakeet":
+            self.model_name = settings.asr_model_speed  # nvidia/parakeet-tdt-1.1b
+        else:
+            self.model_name = "large-v3"
+
     async def initialize(self) -> None:
-        """Load Whisper model."""
+        """Load ASR model based on selected backend."""
         if self._initialized:
             return
 
+        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        if self.backend == "whisperx":
+            await self._init_whisperx()
+        elif self.backend in ("canary", "parakeet"):
+            await self._init_nemo()
+        else:
+            logger.warning(f"Unknown backend {self.backend}, using whisperx")
+            await self._init_whisperx()
+
+        self._initialized = True
+
+    async def _init_whisperx(self) -> None:
+        """Initialize WhisperX backend."""
         try:
             import whisperx
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-
             self._model = whisperx.load_model(
                 self.model_name,
-                device=device,
-                compute_type=self.compute_type if device == "cuda" else "int8",
+                device=self._device,
+                compute_type=self.compute_type if self._device == "cuda" else "int8",
             )
 
             self._whisperx = whisperx
-            self._device = device
-            self._initialized = True
+            self._backend_type = "whisperx"
             logger.info(
-                "WhisperX initialized", model=self.model_name, device=device
+                "WhisperX initialized",
+                model=self.model_name,
+                device=self._device,
             )
 
         except Exception as e:
             logger.warning("WhisperX not available", error=str(e))
-            self._initialized = True
+
+    async def _init_nemo(self) -> None:
+        """Initialize NVIDIA NeMo backend (Canary or Parakeet)."""
+        try:
+            import nemo.collections.asr as nemo_asr
+
+            if self.backend == "canary":
+                # Canary is a multi-task model with translation capabilities
+                self._model = nemo_asr.models.EncDecMultiTaskModel.from_pretrained(
+                    self.model_name
+                )
+            else:  # parakeet
+                # Parakeet is an ASR-focused model
+                self._model = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(
+                    self.model_name
+                )
+
+            if self._device == "cuda":
+                self._model = self._model.cuda()
+
+            self._model.eval()
+            self._backend_type = "nemo"
+            logger.info(
+                f"NVIDIA NeMo {self.backend} initialized",
+                model=self.model_name,
+                device=self._device,
+            )
+
+        except ImportError:
+            logger.warning(
+                "NeMo not available. Install with: pip install 'subtext[nemo]'"
+            )
+            # Fallback to whisperx
+            await self._init_whisperx()
+        except Exception as e:
+            logger.warning(f"NeMo model loading failed: {e}")
+            await self._init_whisperx()
 
     async def process(
         self,
@@ -376,7 +644,7 @@ class TranscribeStage(PipelineStage):
         Transcribe audio to text with word timestamps.
 
         Returns:
-            dict with 'transcript' (text), 'segments', 'words', 'language'
+            dict with 'transcript' (text), 'segments', 'words', 'language', 'backend'
         """
         await self.initialize()
 
@@ -386,8 +654,23 @@ class TranscribeStage(PipelineStage):
                 "segments": [],
                 "words": [],
                 "language": language or "en",
+                "backend": "none",
             }
 
+        # Route to appropriate backend
+        backend_type = getattr(self, "_backend_type", "whisperx")
+        if backend_type == "nemo":
+            return await self._process_nemo(audio, sample_rate, language)
+        else:
+            return await self._process_whisperx(audio, sample_rate, language)
+
+    async def _process_whisperx(
+        self,
+        audio: np.ndarray,
+        sample_rate: int,
+        language: str | None,
+    ) -> dict[str, Any]:
+        """Process audio using WhisperX backend."""
         try:
             # Transcribe
             result = self._model.transcribe(
@@ -432,7 +715,7 @@ class TranscribeStage(PipelineStage):
                     )
 
             logger.info(
-                "Transcription complete",
+                "Transcription complete (WhisperX)",
                 word_count=len(words),
                 language=detected_language,
             )
@@ -442,11 +725,339 @@ class TranscribeStage(PipelineStage):
                 "segments": result.get("segments", []),
                 "words": words,
                 "language": detected_language,
+                "backend": "whisperx",
             }
 
         except Exception as e:
-            logger.error("Transcription failed", error=str(e))
+            logger.error("WhisperX transcription failed", error=str(e))
             raise
+
+    async def _process_nemo(
+        self,
+        audio: np.ndarray,
+        sample_rate: int,
+        language: str | None,
+    ) -> dict[str, Any]:
+        """Process audio using NVIDIA NeMo backend (Canary or Parakeet)."""
+        try:
+            import soundfile as sf
+            import tempfile
+
+            # NeMo requires file input
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                sf.write(f.name, audio, sample_rate)
+                temp_path = f.name
+
+            # Transcribe based on model type
+            if self.backend == "canary":
+                # Canary uses different API
+                transcription = self._model.transcribe(
+                    [temp_path],
+                    batch_size=1,
+                    source_lang=language or "en",
+                    target_lang=language or "en",
+                )
+            else:  # parakeet
+                transcription = self._model.transcribe([temp_path])
+
+            # Clean up
+            Path(temp_path).unlink()
+
+            # Extract transcript
+            if isinstance(transcription, list):
+                full_transcript = transcription[0] if transcription else ""
+            else:
+                full_transcript = str(transcription)
+
+            # NeMo doesn't provide word-level timestamps by default
+            # We create segment-level output
+            duration_ms = int(len(audio) / sample_rate * 1000)
+            segments = [
+                {
+                    "text": full_transcript,
+                    "start": 0,
+                    "end": duration_ms / 1000,
+                }
+            ]
+
+            logger.info(
+                f"Transcription complete (NeMo {self.backend})",
+                transcript_length=len(full_transcript),
+                language=language or "en",
+            )
+
+            return {
+                "transcript": full_transcript,
+                "segments": segments,
+                "words": [],  # NeMo doesn't provide word timestamps
+                "language": language or "en",
+                "backend": f"nemo-{self.backend}",
+            }
+
+        except Exception as e:
+            logger.error(f"NeMo transcription failed", error=str(e))
+            raise
+
+
+# ══════════════════════════════════════════════════════════════
+# Emotion Stage (Speech Emotion Recognition)
+# ══════════════════════════════════════════════════════════════
+
+
+class EmotionStage(PipelineStage):
+    """
+    Speech Emotion Recognition using Emotion2Vec.
+
+    Emotion2Vec is a purpose-built SER model achieving SOTA on 9 multilingual
+    datasets. It provides both discrete emotion labels and continuous VAD
+    (Valence-Arousal-Dominance) predictions.
+
+    Emotions detected:
+    - angry, disgusted, fearful, happy, neutral, sad, surprised, other
+    """
+
+    name = "emotion"
+
+    # Emotion label mapping
+    EMOTION_LABELS = [
+        "angry",
+        "disgusted",
+        "fearful",
+        "happy",
+        "neutral",
+        "other",
+        "sad",
+        "surprised",
+    ]
+
+    def __init__(
+        self,
+        model_name: str = "iic/emotion2vec_plus_large",
+        granularity: str = "utterance",  # 'utterance' or 'frame'
+        device: str | None = None,
+    ):
+        self.model_name = model_name
+        self.granularity = granularity
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self._model = None
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Load Emotion2Vec model via FunASR."""
+        if self._initialized:
+            return
+
+        try:
+            from funasr import AutoModel
+
+            self._model = AutoModel(
+                model=self.model_name,
+                device=self.device,
+                disable_update=True,  # Don't auto-update
+            )
+
+            self._initialized = True
+            logger.info(
+                "Emotion2Vec initialized",
+                model=self.model_name,
+                device=self.device,
+            )
+
+        except ImportError:
+            logger.warning("FunASR not available, emotion detection disabled")
+            self._initialized = True
+        except Exception as e:
+            logger.warning("Emotion2Vec loading failed", error=str(e))
+            self._initialized = True
+
+    async def process(
+        self,
+        audio: np.ndarray,
+        sample_rate: int = 16000,
+        segments: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Detect emotions in audio.
+
+        Args:
+            audio: Audio numpy array
+            sample_rate: Sample rate (should be 16kHz for Emotion2Vec)
+            segments: Optional list of segments to analyze individually
+
+        Returns:
+            dict with 'emotions' (list of emotion predictions per segment),
+            'dominant_emotion', 'emotion_timeline'
+        """
+        await self.initialize()
+
+        if self._model is None:
+            # Return neutral if no model
+            return {
+                "emotions": [{"label": "neutral", "confidence": 1.0}],
+                "dominant_emotion": "neutral",
+                "emotion_timeline": [],
+                "vad": {"valence": 0.0, "arousal": 0.5, "dominance": 0.5},
+            }
+
+        try:
+            import soundfile as sf
+            import tempfile
+
+            # Process segments or whole audio
+            if segments and len(segments) > 0:
+                emotions = []
+                for seg in segments:
+                    start_sample = int(seg.get("start_ms", 0) * sample_rate / 1000)
+                    end_sample = int(seg.get("end_ms", len(audio) / sample_rate * 1000) * sample_rate / 1000)
+                    segment_audio = audio[start_sample:end_sample]
+
+                    if len(segment_audio) < sample_rate * 0.1:  # Min 100ms
+                        emotions.append({
+                            "start_ms": seg.get("start_ms", 0),
+                            "end_ms": seg.get("end_ms", 0),
+                            "label": "neutral",
+                            "confidence": 0.5,
+                            "scores": {},
+                        })
+                        continue
+
+                    # Save to temp file
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                        sf.write(f.name, segment_audio, sample_rate)
+                        result = self._model.generate(f.name, granularity=self.granularity)
+                        Path(f.name).unlink()
+
+                    emotion_result = self._parse_emotion_result(result, seg)
+                    emotions.append(emotion_result)
+            else:
+                # Process whole audio
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                    sf.write(f.name, audio, sample_rate)
+                    result = self._model.generate(f.name, granularity=self.granularity)
+                    Path(f.name).unlink()
+
+                emotions = [self._parse_emotion_result(result)]
+
+            # Calculate dominant emotion
+            emotion_counts: dict[str, float] = {}
+            for e in emotions:
+                label = e.get("label", "neutral")
+                conf = e.get("confidence", 0.5)
+                emotion_counts[label] = emotion_counts.get(label, 0) + conf
+
+            dominant_emotion = max(emotion_counts, key=emotion_counts.get) if emotion_counts else "neutral"
+
+            # Build emotion timeline
+            emotion_timeline = [
+                {
+                    "timestamp_ms": e.get("start_ms", i * 1000),
+                    "emotion": e.get("label", "neutral"),
+                    "confidence": e.get("confidence", 0.5),
+                }
+                for i, e in enumerate(emotions)
+            ]
+
+            # Estimate VAD from emotions
+            vad = self._estimate_vad_from_emotions(emotions)
+
+            logger.info(
+                "Emotion detection complete",
+                segment_count=len(emotions),
+                dominant=dominant_emotion,
+            )
+
+            return {
+                "emotions": emotions,
+                "dominant_emotion": dominant_emotion,
+                "emotion_timeline": emotion_timeline,
+                "vad": vad,
+            }
+
+        except Exception as e:
+            logger.error("Emotion detection failed", error=str(e))
+            raise
+
+    def _parse_emotion_result(
+        self,
+        result: Any,
+        segment: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Parse Emotion2Vec output to standardized format."""
+        try:
+            # FunASR returns list of results
+            if isinstance(result, list) and len(result) > 0:
+                result = result[0]
+
+            # Extract scores
+            scores = {}
+            if "scores" in result:
+                for i, score in enumerate(result["scores"]):
+                    if i < len(self.EMOTION_LABELS):
+                        scores[self.EMOTION_LABELS[i]] = float(score)
+
+            # Get top label
+            if "labels" in result:
+                label = result["labels"][0] if isinstance(result["labels"], list) else result["labels"]
+            else:
+                label = max(scores, key=scores.get) if scores else "neutral"
+
+            confidence = scores.get(label, 0.5) if scores else 0.5
+
+            parsed = {
+                "label": label,
+                "confidence": confidence,
+                "scores": scores,
+            }
+
+            if segment:
+                parsed["start_ms"] = segment.get("start_ms", 0)
+                parsed["end_ms"] = segment.get("end_ms", 0)
+                parsed["speaker_id"] = segment.get("speaker_id")
+
+            return parsed
+
+        except Exception as e:
+            logger.warning("Failed to parse emotion result", error=str(e))
+            return {"label": "neutral", "confidence": 0.5, "scores": {}}
+
+    def _estimate_vad_from_emotions(
+        self, emotions: list[dict[str, Any]]
+    ) -> dict[str, float]:
+        """Estimate VAD values from discrete emotion labels."""
+        # Emotion to VAD mapping (rough estimates)
+        vad_map = {
+            "angry": {"valence": -0.6, "arousal": 0.8, "dominance": 0.7},
+            "disgusted": {"valence": -0.7, "arousal": 0.4, "dominance": 0.5},
+            "fearful": {"valence": -0.7, "arousal": 0.8, "dominance": 0.2},
+            "happy": {"valence": 0.8, "arousal": 0.7, "dominance": 0.6},
+            "neutral": {"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
+            "sad": {"valence": -0.6, "arousal": 0.2, "dominance": 0.3},
+            "surprised": {"valence": 0.2, "arousal": 0.8, "dominance": 0.4},
+            "other": {"valence": 0.0, "arousal": 0.5, "dominance": 0.5},
+        }
+
+        if not emotions:
+            return {"valence": 0.0, "arousal": 0.5, "dominance": 0.5}
+
+        # Weighted average by confidence
+        total_conf = sum(e.get("confidence", 0.5) for e in emotions)
+        valence = arousal = dominance = 0.0
+
+        for e in emotions:
+            label = e.get("label", "neutral")
+            conf = e.get("confidence", 0.5)
+            vad = vad_map.get(label, vad_map["neutral"])
+
+            weight = conf / total_conf if total_conf > 0 else 1 / len(emotions)
+            valence += vad["valence"] * weight
+            arousal += vad["arousal"] * weight
+            dominance += vad["dominance"] * weight
+
+        return {
+            "valence": float(valence),
+            "arousal": float(arousal),
+            "dominance": float(dominance),
+        }
 
 
 # ══════════════════════════════════════════════════════════════

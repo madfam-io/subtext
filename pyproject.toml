@@ -31,16 +31,29 @@ dependencies = [
     "alembic>=1.13.0",
     "redis>=5.0.0",
 
-    # ML/Audio Processing
+    # ML/Audio Processing - Core
     "torch>=2.1.0",
     "torchaudio>=2.1.0",
     "transformers>=4.36.0",
-    "pyannote.audio>=3.1.0",
-    "openai-whisper>=20231117",
-    "whisperx>=3.1.1",
     "librosa>=0.10.1",
     "soundfile>=0.12.1",
+
+    # Noise Suppression: DeepFilterNet (SOTA real-time)
     "deepfilternet>=0.5.6",
+
+    # Speaker Diarization: Pyannote 3.1+
+    "pyannote.audio>=3.1.0",
+
+    # Speaker Embeddings: SpeechBrain ECAPA-TDNN (1.71% EER)
+    "speechbrain>=1.0.0",
+
+    # ASR: WhisperX (Whisper large-v3 with word-level alignment)
+    "openai-whisper>=20231117",
+    "whisperx>=3.1.1",
+
+    # Speech Emotion Recognition: Emotion2Vec via FunASR (SOTA on 9 datasets)
+    "funasr>=1.0.0",
+    "modelscope>=1.10.0",
 
     # LLM Integration
     "openai>=1.10.0",
@@ -81,6 +94,15 @@ dev = [
 ]
 gpu = [
     "torch>=2.1.0+cu121",
+]
+# NVIDIA NeMo for production ASR (Canary, Parakeet) and speaker verification (TitaNet)
+nemo = [
+    "nemo_toolkit[asr]>=2.0.0",
+]
+# Full production stack with all ML capabilities
+full = [
+    "nemo_toolkit[asr]>=2.0.0",
+    "onnxruntime-gpu>=1.16.0",
 ]
 
 [project.scripts]

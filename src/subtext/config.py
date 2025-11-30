@@ -93,20 +93,56 @@ class Settings(BaseSettings):
     resend_reply_to: str = "support@subtext.live"
 
     # ══════════════════════════════════════════════════════════════
-    # ML Models
+    # ML Models - Best-in-Class Open Source (2025)
+    # See MODEL_STACK.md for detailed rationale
     # ══════════════════════════════════════════════════════════════
     model_cache_dir: str = "/models"
-    whisper_model: str = "large-v3"
-    pyannote_model: str = "pyannote/speaker-diarization-3.1"
-    wav2vec_model: str = "facebook/wav2vec2-large-xlsr-53"
+
+    # Noise Suppression: DeepFilterNet (still SOTA for real-time)
+    # Alternatives: GT-CRN, ULCNet (for edge)
     deepfilternet_model: str = "deepfilternet3"
 
-    # LLM Configuration
-    llm_provider: Literal["openai", "anthropic", "ollama", "local"] = "openai"
+    # Voice Activity Detection: Silero VAD (87.7% TPR vs WebRTC's 50%)
+    # GitHub: snakers4/silero-vad
+    silero_vad_model: str = "silero_vad"
+
+    # Speaker Diarization: Pyannote 4.0 Community-1 (best open-source)
+    # 10% DER, 2.5% RTF on GPU
+    # Alternative: NeMo Sortformer (for NVIDIA production)
+    pyannote_model: str = "pyannote/speaker-diarization-3.1"  # Update to 4.0 when released
+    nemo_diarization_model: str = "nvidia/diar_sortformer_4spk-v1"
+
+    # ASR/Transcription: Multiple options by use case
+    # - Accuracy: NVIDIA Canary Qwen 2.5B (5.63% WER - SOTA)
+    # - Speed: NVIDIA Parakeet TDT (2000+ RTFx)
+    # - Multilingual: Whisper large-v3 (40+ languages)
+    asr_model: str = "openai/whisper-large-v3"  # Default: multilingual
+    asr_model_accuracy: str = "nvidia/canary-1b"  # Best English accuracy
+    asr_model_speed: str = "nvidia/parakeet-tdt-1.1b"  # Fastest throughput
+    whisper_model: str = "large-v3"  # Legacy compatibility
+
+    # Speech Emotion Recognition: Emotion2Vec (purpose-built, SOTA on 9 datasets)
+    # GitHub: ddlBoJack/emotion2vec
+    # Alternatives: WavLM (better for noisy speech), DistilHuBERT (lightweight)
+    emotion_model: str = "iic/emotion2vec_plus_large"
+    emotion_model_lite: str = "iic/emotion2vec_plus_base"
+    wav2vec_model: str = "facebook/wav2vec2-large-xlsr-53"  # Legacy fallback
+
+    # Speaker Embedding: ECAPA-TDNN (1.71% EER - best accuracy)
+    # Alternative: TitaNet (NVIDIA NeMo, 1.91% EER)
+    speaker_embedding_model: str = "speechbrain/spkrec-ecapa-voxceleb"
+    speaker_embedding_nemo: str = "nvidia/speakerverification_en_titanet_large"
+
+    # LLM Configuration - Open Source Options
+    # SOTA Open: Llama 3.1 70B, Mixtral 8x22B, Qwen2.5 72B
+    llm_provider: Literal["openai", "anthropic", "ollama", "vllm", "local"] = "openai"
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
-    llm_model: str = "gpt-4-turbo-preview"
+    vllm_base_url: str = "http://localhost:8000"
+    llm_model: str = "gpt-4-turbo-preview"  # Cloud default
+    llm_model_local: str = "meta-llama/Llama-3.1-70B-Instruct"  # Self-hosted SOTA
+    llm_model_fast: str = "meta-llama/Llama-3.1-8B-Instruct"  # Fast local option
 
     # ══════════════════════════════════════════════════════════════
     # Pipeline Configuration
