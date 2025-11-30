@@ -36,6 +36,20 @@ class TestWorkerLifecycle:
         assert ctx["db_initialized"] is True
 
     @pytest.mark.asyncio
+    async def test_startup_with_preload_models(self):
+        """Test startup with model preloading enabled."""
+        from subtext.worker.tasks import startup
+
+        with patch("subtext.db.init_db", new_callable=AsyncMock):
+            with patch("subtext.worker.tasks.settings") as mock_settings:
+                mock_settings.worker_preload_models = True
+                with patch("subtext.worker.tasks._preload_models", new_callable=AsyncMock) as mock_preload:
+                    ctx = {}
+                    await startup(ctx)
+
+                    mock_preload.assert_called_once_with(ctx)
+
+    @pytest.mark.asyncio
     async def test_shutdown_closes_db(self):
         """Test shutdown closes database."""
         from subtext.worker.tasks import shutdown
@@ -45,6 +59,90 @@ class TestWorkerLifecycle:
             await shutdown(ctx)
 
         mock_close_db.assert_called_once()
+
+
+class TestPreloadModels:
+    """Test model preloading."""
+
+    @pytest.mark.asyncio
+    async def test_preload_models_success(self):
+        """Test successful model preloading."""
+        from subtext.worker.tasks import _preload_models
+
+        mock_torch = MagicMock()
+        mock_vad_model = MagicMock()
+        mock_utils = [MagicMock()]
+        mock_torch.hub.load.return_value = (mock_vad_model, mock_utils)
+
+        mock_speechbrain = MagicMock()
+        mock_embedding = MagicMock()
+        mock_speechbrain.inference.speaker.EncoderClassifier.from_hparams.return_value = mock_embedding
+
+        with patch.dict("sys.modules", {
+            "torch": mock_torch,
+            "speechbrain": mock_speechbrain,
+            "speechbrain.inference": mock_speechbrain.inference,
+            "speechbrain.inference.speaker": mock_speechbrain.inference.speaker,
+        }):
+            ctx = {}
+            await _preload_models(ctx)
+
+            assert "vad_model" in ctx
+            assert "vad_utils" in ctx
+            assert "embedding_model" in ctx
+
+    @pytest.mark.asyncio
+    async def test_preload_models_vad_failure(self):
+        """Test model preloading with VAD failure."""
+        from subtext.worker.tasks import _preload_models
+
+        mock_torch = MagicMock()
+        mock_torch.hub.load.side_effect = Exception("VAD load failed")
+
+        mock_speechbrain = MagicMock()
+        mock_embedding = MagicMock()
+        mock_speechbrain.inference.speaker.EncoderClassifier.from_hparams.return_value = mock_embedding
+
+        with patch.dict("sys.modules", {
+            "torch": mock_torch,
+            "speechbrain": mock_speechbrain,
+            "speechbrain.inference": mock_speechbrain.inference,
+            "speechbrain.inference.speaker": mock_speechbrain.inference.speaker,
+        }):
+            ctx = {}
+            await _preload_models(ctx)
+
+            # VAD should not be loaded
+            assert "vad_model" not in ctx
+            # But embedding should still be loaded
+            assert "embedding_model" in ctx
+
+    @pytest.mark.asyncio
+    async def test_preload_models_embedding_failure(self):
+        """Test model preloading with embedding failure."""
+        from subtext.worker.tasks import _preload_models
+
+        mock_torch = MagicMock()
+        mock_vad_model = MagicMock()
+        mock_utils = [MagicMock()]
+        mock_torch.hub.load.return_value = (mock_vad_model, mock_utils)
+
+        mock_speechbrain = MagicMock()
+        mock_speechbrain.inference.speaker.EncoderClassifier.from_hparams.side_effect = Exception("Embedding load failed")
+
+        with patch.dict("sys.modules", {
+            "torch": mock_torch,
+            "speechbrain": mock_speechbrain,
+            "speechbrain.inference": mock_speechbrain.inference,
+            "speechbrain.inference.speaker": mock_speechbrain.inference.speaker,
+        }):
+            ctx = {}
+            await _preload_models(ctx)
+
+            # VAD should still be loaded
+            assert "vad_model" in ctx
+            # But embedding should not be loaded
+            assert "embedding_model" not in ctx
 
 
 # ══════════════════════════════════════════════════════════════
