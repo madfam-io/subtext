@@ -1,0 +1,50 @@
+To absolutely capture the concept of **Subtext**—specifically the translation of *raw audio* into *human insight*—the most critical companion to your PRD is not a technical spec or a pitch deck.
+
+It is **The Psychometric Signal Atlas**.
+
+While the PRD defines *what* we are building, the **Signal Atlas** defines the "language" the software speaks. It is the "Rosetta Stone" that translates engineering metrics (Hertz, Decibels, Milliseconds) into psychological states (Anxiety, Dominance, Deception).
+
+Without this document, developers will just build a transcription tool. **With** this document, they will build an emotional intelligence engine.
+
+-----
+
+# Document: The Subtext Signal Atlas (v1.0)
+
+**Purpose:** To map bio-acoustic markers to psychological probabilities. This serves as the "Rulebook" for the AI analysis layer and the "Design Guide" for the UI/UX visualization.
+
+## 1\. The Temporal Dimension (Time & Silence)
+
+*The silence is often louder than the noise.*
+
+| The Signal | The Metric (Engineering) | The Subtext (Psychology) | Visual Output (UI/WorkAdventure) |
+| :--- | :--- | :--- | :--- |
+| **The Truth Gap** | Latency \> 800ms between *Question End* and *Answer Start*. | **Cognitive Load:** The speaker is calculating, not recalling. High probability of fabrication or hesitation. | **UI:** A yellow "gap" marker in the timeline.<br>**WA:** Avatar pauses animation/freezes. |
+| **The Steamroll** | Overlap Duration \> 2s + Volume differential \> +10dB (Speaker A vs B). | **Dominance/Aggression:** Speaker A is not listening; they are conquering the airtime. | **UI:** The waveform turns jagged Red.<br>**WA:** Avatar scale increases slightly (looming). |
+| **The Dead Air** | Silence \> 5s in a group \> 3 people. | **Disengagement/Friction:** The "Awkward Silence." Group cohesion is failing. | **UI:** Background heatmap turns cold Grey/Blue.<br>**WA:** Room lighting dims or turns blue. |
+
+## 2\. The Spectral Dimension (Pitch & Tone)
+
+*It’s not what you said, it’s how you said it.*
+
+| The Signal | The Metric (Engineering) | The Subtext (Psychology) | Visual Output (UI/WorkAdventure) |
+| :--- | :--- | :--- | :--- |
+| **The Micro-Tremor** | High "Jitter" (cycle-to-cycle frequency variation) in short bursts. | **Stress/Deception:** The vocal cords are tightening due to fight-or-flight response. | **UI:** A "pulse" icon overlay on the transcript.<br>**WA:** Avatar vibrates/shakes slightly. |
+| **The Monotone** | Flat Pitch Variance (\< 10% deviation) over \> 30s. | **Burnout/Apathy:** The speaker has "checked out" emotionally. | **UI:** Text fades to a lower opacity.<br>**WA:** Avatar becomes semi-transparent (ghosting). |
+| **The Uptick** | Rising intonation at the end of declarative sentences (Upspeak). | **Submissiveness/Insecurity:** Seeking validation rather than stating facts. | **UI:** Small question mark icons next to periods.<br>**WA:** Avatar looks around/shrinks. |
+
+## 3\. The Contextual Dimension (Environment & Vibe)
+
+*The invisible "Third Participant" in the meeting.*
+
+| The Signal | The Metric (Engineering) | The Subtext (Context) | Visual Output (UI/WorkAdventure) |
+| :--- | :--- | :--- | :--- |
+| **The Echo Chamber** | High Reverb + Distant Mic Input. | **Low Professional Presence:** Implies a large, empty room or lack of dedicated equipment. | **UI:** Tag as "Low Fidelity Presence." |
+| **The Coffee Shop** | Background Noise Class: "Chatter/Clatter" (via `DeepFilterNet`). | **Distracted/Public:** The user is likely multitasking or feels exposed. | **WA:** Spawn a coffee cup icon above the avatar. |
+
+-----
+
+## Why this document is critical for our "Blue Ocean"
+
+1.  **For the AI Engineers:** They don't need to be psychologists. They just need to code the logic: `IF latency > 800ms THEN trigger_event('truth_gap')`. This document gives them the logic.
+2.  **For the UI Designers:** It solves the "Invisible Interface" problem. How do you visualize "sarcasm"? This Atlas tells them (e.g., mismatch between *Text Sentiment* (Positive) and *Audio Tone* (Flat)).
+3.  **For the Brand:** This document *is* your IP. Competitors have speech-to-text; you have **Speech-to-State**.
