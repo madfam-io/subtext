@@ -255,6 +255,100 @@ class TestQueueFunctions:
 # ══════════════════════════════════════════════════════════════
 
 
+class TestCloseRedisPool:
+    """Test Redis pool closing."""
+
+    @pytest.mark.asyncio
+    async def test_close_redis_pool_with_pool(self):
+        """Test closing Redis pool when pool exists."""
+        import subtext.worker.queue as queue_module
+        from subtext.worker.queue import close_redis_pool
+
+        # Set up mock pool
+        mock_pool = AsyncMock()
+        mock_pool.close = AsyncMock()
+        original_pool = queue_module._pool
+        queue_module._pool = mock_pool
+
+        try:
+            await close_redis_pool()
+
+            mock_pool.close.assert_called_once()
+            assert queue_module._pool is None
+        finally:
+            queue_module._pool = original_pool
+
+    @pytest.mark.asyncio
+    async def test_close_redis_pool_without_pool(self):
+        """Test closing Redis pool when no pool exists."""
+        import subtext.worker.queue as queue_module
+        from subtext.worker.queue import close_redis_pool
+
+        original_pool = queue_module._pool
+        queue_module._pool = None
+
+        try:
+            # Should not raise
+            await close_redis_pool()
+            assert queue_module._pool is None
+        finally:
+            queue_module._pool = original_pool
+
+
+class TestEnqueueJobEdgeCases:
+    """Test edge cases for job enqueueing."""
+
+    @pytest.mark.asyncio
+    async def test_enqueue_job_returns_none_when_no_job(self):
+        """Test enqueue returns None when pool returns None."""
+        with patch("subtext.worker.queue.get_redis_pool", new_callable=AsyncMock) as mock_get_pool:
+            from subtext.worker.queue import enqueue_job
+
+            mock_pool = AsyncMock()
+            mock_pool.enqueue_job = AsyncMock(return_value=None)
+            mock_get_pool.return_value = mock_pool
+
+            job_id = await enqueue_job("process_audio_file", session_id="test")
+
+            assert job_id is None
+
+
+class TestGetJobStatusEdgeCases:
+    """Test edge cases for job status retrieval."""
+
+    @pytest.mark.asyncio
+    async def test_get_job_status_exception(self):
+        """Test get_job_status handles exceptions."""
+        with patch("subtext.worker.queue.get_redis_pool", new_callable=AsyncMock) as mock_get_pool:
+            from subtext.worker.queue import get_job_status
+
+            mock_pool = AsyncMock()
+            mock_pool.job = AsyncMock(side_effect=Exception("Redis error"))
+            mock_get_pool.return_value = mock_pool
+
+            status = await get_job_status("job-123")
+
+            assert status is None
+
+
+class TestCancelJobEdgeCases:
+    """Test edge cases for job cancellation."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_job_exception(self):
+        """Test cancel_job handles exceptions."""
+        with patch("subtext.worker.queue.get_redis_pool", new_callable=AsyncMock) as mock_get_pool:
+            from subtext.worker.queue import cancel_job
+
+            mock_pool = AsyncMock()
+            mock_pool.job = AsyncMock(side_effect=Exception("Redis error"))
+            mock_get_pool.return_value = mock_pool
+
+            result = await cancel_job("job-123")
+
+            assert result is False
+
+
 class TestWorkerSettingsClass:
     """Test the WorkerSettings class for ARQ CLI."""
 
