@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subtext-api
+  namespace: subtext
+  labels:
+    app: subtext-api
+    app.kubernetes.io/name: subtext-api
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: madfam-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subtext-api
+  template:
+    metadata:
+      labels:
+        app: subtext-api
+        app.kubernetes.io/name: subtext-api
+        app.kubernetes.io/part-of: madfam-platform
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: api
+          image: ghcr.io/madfam-org/subtext-api:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: APP_ENV
+              value: production
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          envFrom:
+            - secretRef:
+                name: subtext-secrets
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1500m
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: false
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 30
+          volumeMounts:
+            - name: model-cache
+              mountPath: /models
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 2Gi
